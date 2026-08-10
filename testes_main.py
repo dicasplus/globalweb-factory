@@ -92,3 +92,32 @@ while True:
         break
     else:
         print("OPÇÃO INVALIDA, DIGITE UM NUMERO DE 0 A 4. ")
+
+#BUSCAR POR NOME
+
+print("\n --- TESTE 1: BUSCANDO POR NOME ('Moura') --- \n ")
+buscar_nome = gerenciador.buscar_nome("Moura")
+for p in buscar_nome:
+    print(p.exibir_dados())
+
+#filtar por projeto
+
+print("\n ---TESTE 2: FILTRANDO POR PROJETO (Global Web') --- \n")
+busca_projeto = gerenciador.filtrar_por_projeto("Global Web")
+for p in busca_projeto:
+    print(p.exibir_dados())
+
+#remover
+
+print("\n --- Teste 3: removendo por e-mail (' ') --- \n ")
+gerenciador.remover_por_email("ana@colabaradores.empresa.com")
+
+
+
+
+
+# lista completa
+print("\n###Cadastro de Pessoas ###")
+print('=== LISTA ATUALIZADA APÓS REMOÇAO ===')
+gerenciador.listar_todas()
+

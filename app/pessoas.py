@@ -1,16 +1,20 @@
 class Pessoa:
-    def __init__(self, nome, cargo, email, telefone, data_admissao, projeto):
+    def __init__(self, nome, cargo, email, telefone, data_admissao, projeto, senha):
         self.nome = nome
         self.cargo = cargo
         self.email = email
         self.telefone = telefone
         self.data_admissao = data_admissao
         self.projeto = projeto
+        self.senha = senha
 
     def exibir_dados(self):
+        #mascarar senha com astericos para nao expor a senha em prints aleatorios
+        senha_oculta = "*" * len(self.senha) if self.senha else "Não cadastrada."
         return (
                 f"Nome: {self.nome} | Cargo: {self.cargo} | E-mail: {self.email} | "
-                f"Telefone: {self.telefone} | Data Admissao: {self.data_admissao} | Projeto: {self.projeto}"
+                f"Telefone: {self.telefone} | Data Admissao: {self.data_admissao} | Projeto: {self.projeto} | "
+                f"Senha: {senha_oculta}"
         )
 
     def para_dicionario(self):
@@ -44,6 +48,21 @@ class GerenciadorPessoas:
             print("\n-- LISTA COMPLETA DE PESSOAS--")
             for pessoa in self.pessoas:
                 print(pessoa.exibir_dados())
+
+        def cadastrar_interativo(self):
+            print("\n --- NOVO CADASTRO DE PESSOA ---\n")
+            nome = input("Digite o nome completo: ")
+            cargo = input("Digite o cargo: ")
+            email = input("Digite o e-mail: ")
+            telefone = input("Digite o telefone: ")
+            data_admissao = input("Digite o data de admissao: ")
+            projeto = input("Digite o nome do projeto: ")
+            senha = input("Digite uma senha: ")
+
+            #instancia e adiciona automaticamente nan memoria
+            nova_pessoa = Pessoa(nome, cargo, email, telefone, data_admissao,projeto, senha)
+            self.adicionar(nova_pessoa)
+
 
         # 3 buscando pessoas
 
