@@ -1,4 +1,5 @@
 from app.pessoas import Pessoa, GerenciadorPessoas
+from app.portfolios import GerenciadorPortfolios
 
 
 def exibir_menu():
@@ -9,6 +10,8 @@ def exibir_menu():
     print("2 - Listar todas as Pessoas")
     print("3 - Buscar por nome")
     print("4 - Remover por email")
+    print("5 - Listar Projetos / Portfolios")
+    print("6 - Abrir chamado de Suporte (Guiado)")
     print("0 - SAIR DO PROGRAMA")
     print("=" * 75)
 
@@ -67,6 +70,9 @@ gerenciador.adicionar(pessoa2)
 gerenciador.adicionar(pessoa3)
 gerenciador.adicionar(pessoa4)
 
+#Intanciando o Gerador de Portfolios
+gerenciador_portfolios = GerenciadorPortfolios()6
+
 # gerenciador.cadastrar_interativo()
 while True:
     exibir_menu()
@@ -87,8 +93,18 @@ while True:
     elif opcao == '4':
         email = input("Digite o email: ")
         gerenciador.remover_por_email(email)
+
+    elif opcao == '5':
+        gerenciador_portfolios.listar_projetos()
+
+    elif opcao == '6':
+        solicitante = input("Digite o nome do solicitante: ")
+        chamado = gerenciador_portfolios.criar_chamado_guiado(solicitante)
+        if chamado:
+            print("\n --- SCRIPT GERADO PARA O TICKET---")
+            print(chamado.gerar_script_detalhado())
     elif opcao == '0':
         print("Saindo do programa")
         break
     else:
-        print("OPÇÃO INVALIDA, DIGITE UM NUMERO DE 0 A 4. ")
+        print("OPÇÃO INVALIDA, DIGITE UM NUMERO DE 0 A 6. ")
