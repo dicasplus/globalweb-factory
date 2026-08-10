@@ -71,7 +71,7 @@ gerenciador.adicionar(pessoa3)
 gerenciador.adicionar(pessoa4)
 
 #Intanciando o Gerador de Portfolios
-gerenciador_portfolios = GerenciadorPortfolios()6
+gerenciador_portfolios = GerenciadorPortfolios()
 
 # gerenciador.cadastrar_interativo()
 while True:
