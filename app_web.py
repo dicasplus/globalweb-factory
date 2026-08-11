@@ -39,12 +39,49 @@ st.sidebar.markdown("---")
 menu = st.sidebar.radio(
     "Navegação",
     [
+        "🏠 Início",
         "📋 Listar Pessoas",
         "👤 Cadastrar Pessoa",
         "🎫 Abertura de Chamado",
         "📁 Projetos / Portfólios"
     ]
 )
+
+#------------------------------------------------------
+#       TELA 0: INICIO DA TELA
+#-------------------------------------------------------
+
+if menu == "🏠 Início":
+    col1, col2, col3 = st.columns([1, 2, 1])
+    with col2:
+        # Exibe a logo centralizada
+        st.image("logo.png", use_container_width=True)
+
+    st.markdown("<h1 style='text-align: center;'>GlobalWeb Factory</h1>  ", unsafe_allow_html=True)
+    st.markdown("<h3 style = 'text-aling: center; color:#888;'> Sistema de Integração de Gestão de Equipe e Suporte</h3>  ", unsafe_allow_html=True)
+
+    st.markdown("---")
+
+    #cartoes explicativo dos módulos
+    c1, c2 = st.columns(2)
+    with c1:
+        st.info("""
+                ### 👥 Gestão de Colaboradores
+                * **Listagem:** Acesso à base completa de colaboradores ativos.
+                * **Cadastro:** Formulário estruturado para novos membros da equipe.
+                """)
+
+        with c2:
+            st.success("""
+                ### 🎫 Suporte & Portfólios
+                * **Chamados Guiados:** Padronização e geração de tickets.
+                * **Catálogo:** Visão geral de contratos e categorias ativas.
+                """)
+
+        st.markdown("---")
+        st.caption("🚀 **Desenvolvido por Charles** | Python 3 & Streamlit")
+
+
 
 # TELA 1: LISTAGEM DE PESSOAS
 # *********************************
