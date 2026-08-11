@@ -2,6 +2,8 @@ import streamlit as st
 
 from app.pessoas import Pessoa, GerenciadorPessoas
 from app.portfolios import GerenciadorPortfolios
+from app.portfolios import Chamado
+#from main import solicitante, gerenciador
 
 # 1 - Configurações visuais da aba do navegador
 
@@ -156,6 +158,72 @@ elif menu == "👤 Cadastrar Pessoa":
             else:
                 #feedback visual amarelo de aviso
                 st.warning(" Preencha ao menos o Nome e o E-mail para continuar ")
+
+
+elif menu == "🎫 Abertura de Chamado":
+    st.title("🎫 Abertura Guiada de Chamados")
+    st.write("Gere Scripts padronizados de suporte para os porfólios ativos.")
+
+    solicitante = st.text_input(" Nome do Solicitante", value="Charles")
+
+    #Recuéra o gerenciador de portfóçops da memória da sessão
+    gerenciador_port = st.session_state.gerenciador_portfolios
+    projeto = list(gerenciador_port.projeto_categoria.keys())
+
+    proj_escolhido = st.selectbox("Selecione o Projeto  / contrato", projeto)
+    categorias = gerenciador_port.projeto_categoria[proj_escolhido]
+    cat_escolhida = st.selectbox("Selecione o Categoria", categorias)
+
+    resumo = st.text_input("Resumo Curto da Demanda")
+
+    #Campos dinamicos baseados na categoria escolhida
+    detalhes = {}
+    if "Equipamento" in cat_escolhida or "Patrimônio" in cat_escolhida:
+        detalhes["Código Patrimônio (EST)"] = st.text_input("Número do Patrimônio/EST")
+        detalhes["Localização / Andar "] = st.text_input("Andar / Sala")
+        detalhes["IP do Host"] = st.text_input("Endereço IP (opcional)")
+    else:
+        detalhes["Descrição do Problema"] = st.text_area("Detalhe da Necessidade ")
+        detalhes["Impacto no trabalho"] = st.select_slider("Impacto no trabalho", options=["Baixo", "Médio", "Crítico"])
+
+    if st.button("🚀 Gerar Ticket Formatado"):
+        if resumo:
+            from app.portfolios import Chamado
+            chamado = Chamado(proj_escolhido, cat_escolhida, solicitante, resumo, detalhes)
+
+            st.markdown("---")
+            st.markdown("### 📝 Script Gerado para o Ticket")
+            #st.code renderiza um bloco escuro com botão de copiar automatico!
+            st.code(chamado.gerar_script_detalhado(), language="text")
+
+        else:
+            st.warning("⚠️ Preencha o resumo da demanda antes de gerar o ticket.")
+
+    #tela 4 - PROJETOS  / PORTFOLIOS
+
+    elif menu == "📁 Projetos / Portfólios":
+        st.title("📁 Projetos / Portfólios")
+        st.write("Visualize os contratos e as categorias de suporte vinculadas")
+
+        gerenciador_port = st.session_state.gerenciador_portfolios
+
+        for proj, cats in gerenciador_port.projeto_categoria.items():
+            #st.expander cria caixas retrateis
+            with st.expander(f"📌 Projeto / Contrato: {proj}"):
+                st.write("**Categorias de suporte Ativas: **")
+                for c in cats:
+                    st.write(f"- {c}")
+
+
+
+
+
+
+
+
+
+
+
 
 
 

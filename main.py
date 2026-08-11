@@ -65,6 +65,7 @@ if __name__ == '__main__':
     # instanciando e alimentando o gerenciador ---
 
 gerenciador = GerenciadorPessoas()
+#gerenciador.adicionar(pessoa1)
 gerenciador.adicionar(pessoa1)
 gerenciador.adicionar(pessoa2)
 gerenciador.adicionar(pessoa3)
@@ -108,3 +109,5 @@ while True:
         break
     else:
         print("OPÇÃO INVALIDA, DIGITE UM NUMERO DE 0 A 6. ")
+
+
