@@ -1,4 +1,5 @@
 import streamlit as st
+from streamlit import subheader
 
 from app.pessoas import Pessoa, GerenciadorPessoas
 from app.portfolios import GerenciadorPortfolios
@@ -202,26 +203,48 @@ elif menu == "🎫 Abertura de Chamado":
     #tela 4 - PROJETOS  / PORTFOLIOS
 
     #elif menu == "📁 Projetos / Portfólios":
-    elif  "Projetos" in menu:
-        st.title("📁 Contratos e Catálogos Técnicos")
-        st.write("Visão geral dos contratos atendidos e da árvore de categorias técnicas")
+elif  "Projetos" in menu:
+        st.title("📂 Matriz de Portfólios & Contratos ")
+        st.caption("Guia de Referência rápida do escopo de atendimento para colaboradores e gestores. ")
 
         # 1. recupera o gerenciador da sessão antes de usar
         gerenciador_port = st.session_state.gerenciador_portfolios
 
-        col1, col2 = st.columns(2)
+        # 1. Metricas de Resumo no topo
+        col_m1, col_m2, col_m3 = st.columns(3)
+        total_contratos = len(gerenciador_port.contratos)
+        total_cats = len(gerenciador_port.categorias_tecnicas)
+        total_subcats = sum(len(subs) for subs in gerenciador_port.categorias_tecnicas.values())
 
-        with col1:
-            st.subheader("🏢 Contratos Ativos")
+        col_m1.metric("🏢 Contratos Ativos", total_contratos)
+        col_m2.metric("📁 Categorias Principais", total_cats)
+        col_m3.metric("📄 Subcategorias Mapeadas", total_subcats)
+
+        st.markdown("---")
+
+        # 2. Visualiação em abas (tabs) para organização
+        tab_contratos, tab_esqueleto = st.tabs(["🏢 Contratos & Clientes", "🌳 Esqueleto do Catálogo Técnico"])
+
+
+        with tab_contratos:
+            st.subheader("Lista de Contratos Habilitados")
+            st.info("Projetos e empresas atualmente atendidos pela operação")
             for contrato in gerenciador_port.contratos:
                 st.markdown(f"- **{contrato}**")
 
-        with col2:
-            st.subheader("🛠️ Categorias & Subcategorias")
+        with tab_esqueleto:
+            st.subheader("Árvore de Categorias e Subcategorias")
+            st.write("Expanda as categorias para consultar o escopo detalhado de cada área de suporte:")
+
+
+
+
             for cat, subcats in gerenciador_port.categorias_tecnicas.items():
-                with st.expander(f"{cat}"):
+                with st.expander(f"📁{cat} | ({len(subcats)} Subcategorias)"):
                     for subcat in subcats:
                         st.write(f"- {subcat}")
+
+
 
 
 
