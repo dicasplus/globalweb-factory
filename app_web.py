@@ -168,11 +168,11 @@ elif menu == "🎫 Abertura de Chamado":
 
     #Recuéra o gerenciador de portfóçops da memória da sessão
     gerenciador_port = st.session_state.gerenciador_portfolios
-    projeto = list(gerenciador_port.projeto_categoria.keys())
-
-    proj_escolhido = st.selectbox("Selecione o Projeto  / contrato", projeto)
-    categorias = gerenciador_port.projeto_categoria[proj_escolhido]
-    cat_escolhida = st.selectbox("Selecione o Categoria", categorias)
+    proj_escolhido = st.selectbox("Selecione o Projeto  / contrato", gerenciador_port.contratos)
+    categorias = list(gerenciador_port.categorias_tecnicas.keys())
+    cat_escolhida = st.selectbox("Selecione a Categoria", categorias)
+    subcategorias = gerenciador_port.categorias_tecnicas[cat_escolhida]
+    subcat_escolhida = st.selectbox("Selecione a Subcategoria", subcategorias)
 
     resumo = st.text_input("Resumo Curto da Demanda")
 
@@ -189,7 +189,7 @@ elif menu == "🎫 Abertura de Chamado":
     if st.button("🚀 Gerar Ticket Formatado"):
         if resumo:
             from app.portfolios import Chamado
-            chamado = Chamado(proj_escolhido, cat_escolhida, solicitante, resumo, detalhes)
+            chamado = Chamado(proj_escolhido, cat_escolhida, subcat_escolhida, solicitante, resumo, detalhes)
 
             st.markdown("---")
             st.markdown("### 📝 Script Gerado para o Ticket")
@@ -201,18 +201,30 @@ elif menu == "🎫 Abertura de Chamado":
 
     #tela 4 - PROJETOS  / PORTFOLIOS
 
-    elif menu == "📁 Projetos / Portfólios":
-        st.title("📁 Projetos / Portfólios")
-        st.write("Visualize os contratos e as categorias de suporte vinculadas")
+    #elif menu == "📁 Projetos / Portfólios":
+    elif  "Projetos" in menu:
+        st.title("📁 Contratos e Catálogos Técnicos")
+        st.write("Visão geral dos contratos atendidos e da árvore de categorias técnicas")
 
+        # 1. recupera o gerenciador da sessão antes de usar
         gerenciador_port = st.session_state.gerenciador_portfolios
 
-        for proj, cats in gerenciador_port.projeto_categoria.items():
-            #st.expander cria caixas retrateis
-            with st.expander(f"📌 Projeto / Contrato: {proj}"):
-                st.write("**Categorias de suporte Ativas: **")
-                for c in cats:
-                    st.write(f"- {c}")
+        col1, col2 = st.columns(2)
+
+        with col1:
+            st.subheader("🏢 Contratos Ativos")
+            for contrato in gerenciador_port.contratos:
+                st.markdown(f"- **{contrato}**")
+
+        with col2:
+            st.subheader("🛠️ Categorias & Subcategorias")
+            for cat, subcats in gerenciador_port.categorias_tecnicas.items():
+                with st.expander(f"{cat}"):
+                    for subcat in subcats:
+                        st.write(f"- {subcat}")
+
+
+
 
 
 

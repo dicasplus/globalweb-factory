@@ -1,47 +1,88 @@
 class Chamado:
     """Classe responsavel por estruturar e formatar solicitaçao final"""
 
-    def __init__(self, projeto, categoria, solicitante, descricao_curta, detalhes):
+    def __init__(self, projeto, categoria, subcategoria, solicitante, resumo, detalhes_adicionais):
         self.projeto = projeto
         self.categoria = categoria
+        self.subcategoria = subcategoria
         self.solicitante = solicitante
-        self.descricao_curta = descricao_curta
-        self.detalhes = detalhes # Dicionarios com respostas especificas (exemplo, IP: Patrimonio)
+        self.resumo = resumo,
+        self.detalhes = detalhes_adicionais # Dicionarios com respostas especificas (exemplo, IP: Patrimonio)
 
     def gerar_script_detalhado(self):
 
         """Gera o texto padronizado e formatado pronto para colar no sistema de tickets"""
         script = f"""
     ===========================================================================
-                SOLICITAÇÃO DE SUPORTE - {self.projeto.upper()}
+                SOLICITAÇÃO DE SUPORTE - GW FACTORY
     ===========================================================================
     [INFORMAÇÕES GERAIS]
-    > Projeto / Contrato : {self.projeto}
+    > Contrato / Empresa : {self.projeto}
     > Categoria : {self.categoria}
+    > Subcategoria : {self.subcategoria}
     > Solicitante : {self.solicitante}
-    > Resumo da Demanda: {self.descricao_curta}
+    > Resumo da Demanda: {self.resumo}
     
     [DETALHAMENTO TÉCNICO]
     """
         for chave, valor in self.detalhes.items():
-            script += f">{chave:<25}: {valor}\n"
-
-        script += """==========================================================
-        [STATUS]: Aguardando atendimento / triagem
-        =================================================
-        """
-        return script
+            if valor:
+                script += f">{chave:<20}: {valor}\n"
+                script += """==========================================================
+                            [STATUS]: Aguardando atendimento / triagem
+                            =================================================
+                                                                            """
+                return script
 
 class GerenciadorPortfolios:
     """ Gerencia os Projetos  / contratanntes e os Fluxos de aberturas de Chamados"""
     def __init__(self):
         #Mapeamento simples de projetos e categorias de suporte disponivel
-        self.projeto_categoria = {
-            "MCTI": ['Suporte e Sistema / Wiki', 'Acesso a Rede  / VPN', 'Equipamento / Patrimônio'],
-            "MEC": ["Analise de Dados", "Liberação de Perfil", "Instalacao de Software"],
-            "COPASA": ["Atendimento de Tickets", "Manutenação de Perfil", "Geral" ],
-            "Global Web":["Duvidas RH / Ponto", "Suporte interno" ]
+        self.contratos = [
+            #lista simples e expansível de contratos
+            "MCTI",
+            "COPASA",
+            "Global Web",
+            "MEC",
+            "MPM",
+            "START CAOA",
+            "OUTROS"
+        ]
+
+        #Categorias e subcategorias
+        self.categorias_tecnicas = {
+
+            "🖥️ Equipamentos & Hardawares" :[
+                "Substituição / Instalação (EST/Patrimônio)",
+                "Manutenção / Diagnóstico de Defeito",
+                "Periféricos (Teclado, Mouse, Monitor, Headset, webcam)"
+
+            ],
+
+            "🔑 Acessos & Senhas":[
+
+                "Redefinição /Desbloqueio de senha",
+                "Criação de Novo Usuário / Permissões",
+                "Acesso a Pastas / Rede / VPN"
+            ],
+            "⚙️ Sistemas & Softwares":[
+                "Erro / Bug em aplicaçã",
+                "instalação de Software Homologados",
+                "Suporte a Sistemas de Ponto /RH"
+
+            ],
+
+            "🌐 Redes & Conectividades": [
+                "Problemas de Conexão / Wi-fi",
+                "Bloqueio ou acesso para Sites",
+                "Configuração de IP / Ponto de Rede",
+                "lentidão na Rede "
+
+            ]
+
         }
+
+
     def listar_projetos(self):
         """Exibe todos os projetos disponiveis"""
         print("\n --- PROJETOS  / PORTFOLIOS DISPONÍVEIS ---")
