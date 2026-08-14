@@ -3,3 +3,4 @@ __pycache__/
 .idea/
 *.pyc
 teste_mainn.py
+chamados_factory.db
