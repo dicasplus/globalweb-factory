@@ -1,5 +1,8 @@
 import json
 import os
+import streamlit as st
+
+api_key = st.secrets.get("GEMINI_API_KEY") or os.getenv("GEMINI_API_KEY")
 
 
 class AgenteAtendimento:

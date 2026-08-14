@@ -1,10 +1,10 @@
-import sqlite3
 import os
+import sqlite3
 
 
 class DatabaseManager:
+
     def __init__(self, db_name="chamados_factory.db"):
-        # Garante que o banco seja salvo na raiz do projeto
         base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
         self.db_path = os.path.join(base_dir, db_name)
         self.criar_tabelas()
@@ -13,10 +13,11 @@ class DatabaseManager:
         return sqlite3.connect(self.db_path)
 
     def criar_tabelas(self):
-        """Cria a tabela de chamados caso ela ainda não exista."""
+        """Cria e atualiza as tabelas do banco de dados."""
         query = """
         CREATE TABLE IF NOT EXISTS chamados (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
+            protocolo TEXT,
             solicitante TEXT,
             projeto TEXT,
             categoria TEXT,
@@ -27,23 +28,43 @@ class DatabaseManager:
             resumo TEXT,
             descricao TEXT,
             impacto TEXT,
+            prazo_sla TEXT,
             data_abertura DATETIME DEFAULT CURRENT_TIMESTAMP
         )
         """
         with self.conectar() as conn:
             cursor = conn.cursor()
             cursor.execute(query)
+
+            # garante que colunas novas existam em bancos antigos
+            cursor.execute("PRAGMA table_info(chamados)")
+            colunas = [col[1] for col in cursor.fetchall()]
+
+            if "protocolo" not in colunas:
+                cursor.execute("ALTER TABLE chamados ADD COLUMN protocolo TEXT")
+            if "prazo_sla" not in colunas:
+                cursor.execute("ALTER TABLE chamados ADD COLUMN prazo_sla TEXT")
+
             conn.commit()
+
+    def obter_proximo_id(self):
+        """Retorna o próximo ID incremental para montar o número do protocolo."""
+        with self.conectar() as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT MAX(id) FROM chamados")
+            ultimo_id = cursor.fetchone()[0]
+            return (ultimo_id or 0) + 1
 
     def salvar_chamado(self, dados_chamado: dict):
         """Salva um novo chamado no banco de dados."""
         query = """
         INSERT INTO chamados (
-            solicitante, projeto, categoria, subcategoria, 
-            patrimonio, andar_sala, ip, resumo, descricao, impacto
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            protocolo, solicitante, projeto, categoria, subcategoria, 
+            patrimonio, andar_sala, ip, resumo, descricao, impacto, prazo_sla
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """
         valores = (
+            dados_chamado.get("protocolo", ""),
             dados_chamado.get("solicitante", ""),
             dados_chamado.get("projeto", ""),
             dados_chamado.get("categoria", ""),
@@ -53,24 +74,22 @@ class DatabaseManager:
             dados_chamado.get("ip", ""),
             dados_chamado.get("resumo", ""),
             dados_chamado.get("descricao", ""),
-            dados_chamado.get("impacto", "")
+            dados_chamado.get("impacto", "Baixo"),
+            dados_chamado.get("prazo_sla", "24 horas"),
         )
 
         with self.conectar() as conn:
             cursor = conn.cursor()
             cursor.execute(query, valores)
             conn.commit()
-            return cursor.lastrowid  # Retorna o ID gerado (Ex: Chamado #12)
+            return cursor.lastrowid
 
     def listar_chamados(self):
-        """Busca todos os chamados para mostrar na tela depois."""
-        query = "SELECT * FROM chamados ORDER BY data_abertura DESC"
+        """Busca todos os chamados salvos."""
+        query = "SELECT * FROM chamados ORDER BY id DESC"
         with self.conectar() as conn:
             cursor = conn.cursor()
             cursor.execute(query)
-            # Pega os nomes das colunas para montar um dicionário
             colunas = [descricao[0] for descricao in cursor.description]
             linhas = cursor.fetchall()
-
-            # Transforma a resposta do banco em uma lista de dicionários fáceis de ler
             return [dict(zip(colunas, linha)) for linha in linhas]
