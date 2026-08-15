@@ -4,3 +4,5 @@ __pycache__/
 *.pyc
 teste_mainn.py
 chamados_factory.db
+.streamlit/
+secrets.toml
