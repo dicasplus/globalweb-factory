@@ -73,63 +73,233 @@ menu = st.sidebar.radio(
 # ------------------------------------------------------------------------------
 # TELA 0: INÍCIO
 # ------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------
+# TELA 0: INÍCIO (Com Login, Boas-Vindas e Cadastro rápido)
+# ------------------------------------------------------------------------------
 if menu == "🏠 Início":
-    col1, col2, col3 = st.columns([1, 2, 1])
-    with col2:
-        st.image("logo.png", use_container_width=True)
 
-    st.markdown(
-        "<h1 style='text-align: center;'>GlobalWeb Factory</h1>",
-        unsafe_allow_html=True,
-    )
-    st.markdown(
-        "<h3 style='text-align: center; color:#888;'>Sistema de Integração de Gestão de Equipe e Suporte</h3>",
-        unsafe_allow_html=True,
-    )
+    # 1. Garante que o estado 'usuario_logado' exista na sessão do Streamlit
+    if "usuario_logado" not in st.session_state:
+        st.session_state.usuario_logado = None
 
-    st.markdown("---")
+    # --------------------------------------------------------------------------
+    # 🌟 CENÁRIO A: USUÁRIO JÁ ESTÁ LOGADO
+    # --------------------------------------------------------------------------
+    if st.session_state.usuario_logado is not None:
+        usuario = st.session_state.usuario_logado
 
-    c1, c2 = st.columns(2)
-    with c1:
-        st.info("""
-        ### 👥 Gestão de Colaboradores
-        * **Listagem:** Acesso à base completa de colaboradores ativos.
-        * **Cadastro:** Formulário estruturado para novos membros da equipe.
-        """)
+        # Cabeçalho personalizado com o nome do colaborador
+        st.success(f"👋 Bem-vindo(a) de volta, **{usuario['nome']}**!")
 
-    with c2:
-        st.success("""
-        ### 🎫 Suporte & Portfólios
-        * **Chamados Guiados:** Padronização e geração de tickets.
-        * **Catálogo:** Visão geral de contratos e categorias ativas.
-        """)
+        col1, col2, col3 = st.columns([1, 2, 1])
+        with col2:
+            st.image("logo.png", use_container_width=True)
 
-    st.markdown("---")
-    st.caption("🚀 **Desenvolvido por Charles** | Python 3 & Streamlit")
+        st.markdown(
+            "<h1 style='text-align: center;'>GlobalWeb Factory</h1>",
+            unsafe_allow_html=True,
+        )
+        st.markdown(
+            f"<h3 style='text-align: center; color:#888;'>Painel de Operações - {usuario['cargo']}</h3>",
+            unsafe_allow_html=True,
+        )
+
+        st.markdown("---")
+
+        # Cartões de Resumo das Funcionalidades
+        c1, c2 = st.columns(2)
+        with c1:
+            st.info(f"""
+            ### 👥 Seus Dados de Acesso
+            * **E-mail:** {usuario['email']}
+            * **Projetos Atribuídos:** `{usuario['projeto']}`
+            """)
+
+        with c2:
+            st.success("""
+            ### 🎫 Atendimento Ativo
+            * Utilize o menu lateral para **Abertura de Chamados**.
+            * Acompanhe os SLAs na aba de **Histórico de Chamados**.
+            """)
+
+        st.markdown("---")
+
+        # Botão para Encerrar a Sessão (Logout)
+        if st.button("🚪 Sair do Sistema", type="secondary"):
+            st.session_state.usuario_logado = None
+            st.rerun()  # Recarrega a tela imediatamente para atualizar o estado
+
+    # --------------------------------------------------------------------------
+    # 🔑 CENÁRIO B: USUÁRIO AINDA NÃO FEZ LOGIN (Tela de Boas-Vindas)
+    # --------------------------------------------------------------------------
+    else:
+        # Apresentação do Cabeçalho
+        col1, col2, col3 = st.columns([1, 2, 1])
+        with col2:
+            st.image("logo.png", use_container_width=True)
+
+        st.markdown(
+            "<h1 style='text-align: center;'>GlobalWeb Factory</h1>",
+            unsafe_allow_html=True,
+        )
+        st.markdown(
+            "<h3 style='text-align: center; color:#888;'>Portal Único de Gestão e Suporte Integrado</h3>",
+            unsafe_allow_html=True,
+        )
+
+        st.markdown("---")
+
+        # 🗂️ Abas para alternar entre Login e Novo Cadastro
+        tab_login, tab_cadastro = st.tabs(
+            ["🔑 Acessar Minha Conta", "📝 Não tenho cadastro (Cadastrar-me)"]
+        )
+
+        # ----------------------------------------------------------------------
+        # ABA 1: FORMULÁRIO DE LOGIN
+        # ----------------------------------------------------------------------
+        with tab_login:
+            st.subheader("Autenticação de Colaborador")
+            st.caption("Informe seu e-mail e senha cadastrados para acessar.")
+
+            with st.form("form_login_inicio"):
+                login_email = st.text_input(
+                    "E-mail Corporativo", placeholder="seu.nome@empresa.com"
+                )
+                login_senha = st.text_input("Senha de Acesso", type="password")
+
+                btn_entrar = st.form_submit_button(
+                    "🔑 Entrar no Sistema", type="primary"
+                )
+
+                if btn_entrar:
+                    # 🟢 Busca e valida o usuário direto do banco de dados SQLite
+                    colaborador = st.session_state.db.buscar_pessoa_por_login(
+                        login_email, login_senha
+                    )
+
+                    if colaborador:
+                        st.session_state.usuario_logado = colaborador
+                        st.balloons()
+                        st.success(
+                            f"✅ Bem-vindo(a), **{colaborador['nome']}**!"
+                        )
+                        st.rerun()
+                    else:
+                        st.error(
+                            "❌ E-mail ou senha incorretos. Verifique suas credenciais ou faça o cadastro."
+                        )
+
+        # ----------------------------------------------------------------------
+        # ABA 2: FORMULÁRIO DE CADASTRO RÁPIDO (Salvando direto no SQLite)
+        # ----------------------------------------------------------------------
+        with tab_cadastro:
+            st.subheader("Criar Novo Cadastro de Colaborador")
+            st.caption(
+                "Preencha os dados abaixo para salvar no banco de dados e liberar o acesso."
+            )
+
+            with st.form("form_cadastro_rapido"):
+                col_c1, col_c2 = st.columns(2)
+
+                with col_c1:
+                    novo_nome = st.text_input("Nome Completo")
+                    novo_cargo = st.text_input(
+                        "Cargo", placeholder="Ex: Analista de TI"
+                    )
+                    novo_email = st.text_input("E-mail Corporativo")
+
+                with col_c2:
+                    novo_telefone = st.text_input("Telefone / Celular")
+                    nova_admissao = st.text_input(
+                        "Data de Admissão", placeholder="DD/MM/AAAA"
+                    )
+                    novos_projetos = st.multiselect(
+                        "Projetos de Atuação",
+                        ["MCTI", "MEC", "COPASA", "Globalweb", "Start Caoa"],
+                        default=["MCTI"],
+                    )
+                    nova_senha = st.text_input(
+                        "Crie uma Senha de Acesso", type="password"
+                    )
+
+                btn_confirmar_cadastro = st.form_submit_button(
+                    "✨ Confirmar e Salvar Cadastro"
+                )
+
+                if btn_confirmar_cadastro:
+                    if (
+                            novo_nome
+                            and novo_email
+                            and nova_senha
+                            and novos_projetos
+                    ):
+                        string_proj = ", ".join(novos_projetos)
+
+                        nova_pessoa_dict = {
+                            "nome": novo_nome,
+                            "cargo": novo_cargo,
+                            "email": novo_email,
+                            "telefone": novo_telefone,
+                            "data_admissao": nova_admissao,
+                            "projeto": string_proj,
+                            "senha": nova_senha,
+                        }
+
+                        try:
+                            # 🟢 Salva permanentemente no banco SQLite
+                            st.session_state.db.salvar_pessoa(nova_pessoa_dict)
+
+                            # Loga automaticamente o usuário recém-cadastrado
+                            st.session_state.usuario_logado = nova_pessoa_dict
+
+                            st.balloons()
+                            st.success(
+                                f"🎉 Cadastro de **{novo_nome}** salvo no banco com sucesso!"
+                            )
+                            st.rerun()
+
+                        except Exception as e:
+                            st.error(
+                                f"⚠️ Erro ao salvar cadastro (este e-mail pode já estar cadastrado): {e}"
+                            )
+                    else:
+                        st.warning(
+                            "⚠️ Preencha Nome, E-mail, Senha e escolha pelo menos 1 Projeto."
+                        )
+
+        st.markdown("---")
+        st.caption("🚀 **GlobalWeb Factory** | Desenvolvido por Charles")
 
 # ------------------------------------------------------------------------------
 # TELA 1: LISTAGEM DE PESSOAS
 # ------------------------------------------------------------------------------
 elif menu == "📋 Listar Pessoas":
     st.title("Pessoas Cadastradas")
-    st.write("Visualização completa da equipe e colaboradores do sistema.")
+    st.write(
+        "Visualização completa da equipe cadastrada no banco de dados."
+    )
 
-    pessoas = st.session_state.gerenciador.pessoas
+    # 🟢 Puxa os colaboradores diretamente do SQLite
+    pessoas_banco = st.session_state.db.listar_pessoas()
 
-    if pessoas:
-        dados_tabela = []
-        for p in pessoas:
-            dados_tabela.append({
-                "Nome": p.nome,
-                "Cargo": p.cargo,
-                "E-mail": p.email,
-                "Telefone": p.telefone,
-                "Admissão": p.data_admissao,
-                "Projetos Atribuídos": p.projeto,
-            })
-        st.dataframe(dados_tabela, use_container_width=True)
+    if pessoas_banco:
+        st.dataframe(
+            pessoas_banco,
+            use_container_width=True,
+            column_config={
+                "id": st.column_config.NumberColumn("ID", format="#%d"),
+                "nome": "Nome Completo",
+                "cargo": "Cargo",
+                "email": "E-mail",
+                "telefone": "Telefone",
+                "data_admissao": "Admissão",
+                "projeto": "Projetos Atribuídos",
+                "senha": None,  # Oculta a senha da tabela por segurança
+            },
+            hide_index=True,
+        )
     else:
-        st.info("Nenhuma pessoa encontrada no momento.")
+        st.info("Nenhuma pessoa encontrada no banco de dados.")
 
 # ------------------------------------------------------------------------------
 # TELA 2: CADASTRO DE PESSOAS (Com seleção de múltiplos projetos)

@@ -1,95 +1,174 @@
-import os
 import sqlite3
 
 
 class DatabaseManager:
 
     def __init__(self, db_name="chamados_factory.db"):
-        base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-        self.db_path = os.path.join(base_dir, db_name)
-        self.criar_tabelas()
+        self.db_name = db_name
+        self.init_db()
 
-    def conectar(self):
-        return sqlite3.connect(self.db_path)
+    def get_connection(self):
+        """Abre a conexão com o arquivo do banco SQLite."""
+        return sqlite3.connect(self.db_name)
 
-    def criar_tabelas(self):
-        """Cria e atualiza as tabelas do banco de dados."""
-        query = """
-        CREATE TABLE IF NOT EXISTS chamados (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            protocolo TEXT,
-            solicitante TEXT,
-            projeto TEXT,
-            categoria TEXT,
-            subcategoria TEXT,
-            patrimonio TEXT,
-            andar_sala TEXT,
-            ip TEXT,
-            resumo TEXT,
-            descricao TEXT,
-            impacto TEXT,
-            prazo_sla TEXT,
-            data_abertura DATETIME DEFAULT CURRENT_TIMESTAMP
-        )
-        """
-        with self.conectar() as conn:
+    def init_db(self):
+        """Cria as tabelas necessárias no banco de dados caso não existam."""
+        with self.get_connection() as conn:
             cursor = conn.cursor()
-            cursor.execute(query)
 
-            # garante que colunas novas existam em bancos antigos
-            cursor.execute("PRAGMA table_info(chamados)")
-            colunas = [col[1] for col in cursor.fetchall()]
+            # 1. Tabela de Chamados
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS chamados (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    protocolo TEXT,
+                    solicitante TEXT,
+                    projeto TEXT,
+                    categoria TEXT,
+                    subcategoria TEXT,
+                    resumo TEXT,
+                    patrimonio TEXT,
+                    andar_sala TEXT,
+                    ip TEXT,
+                    descricao TEXT,
+                    impacto TEXT,
+                    prazo_sla TEXT,
+                    data_abertura DATETIME DEFAULT CURRENT_TIMESTAMP
+                )
+            """)
 
-            if "protocolo" not in colunas:
-                cursor.execute("ALTER TABLE chamados ADD COLUMN protocolo TEXT")
-            if "prazo_sla" not in colunas:
-                cursor.execute("ALTER TABLE chamados ADD COLUMN prazo_sla TEXT")
-
+            # 🟢 2. NOVA TABELA: Pessoas / Colaboradores Persistentes
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS pessoas (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    nome TEXT NOT NULL,
+                    cargo TEXT,
+                    email TEXT UNIQUE NOT NULL,
+                    telefone TEXT,
+                    data_admissao TEXT,
+                    projeto TEXT,
+                    senha TEXT NOT NULL
+                )
+            """)
             conn.commit()
 
-    def obter_proximo_id(self):
-        """Retorna o próximo ID incremental para montar o número do protocolo."""
-        with self.conectar() as conn:
-            cursor = conn.cursor()
-            cursor.execute("SELECT MAX(id) FROM chamados")
-            ultimo_id = cursor.fetchone()[0]
-            return (ultimo_id or 0) + 1
+        # Insere os dados de teste iniciais apenas se a tabela estiver vazia
+        self._inserir_pessoas_iniciais()
 
-    def salvar_chamado(self, dados_chamado: dict):
-        """Salva um novo chamado no banco de dados."""
-        query = """
-        INSERT INTO chamados (
-            protocolo, solicitante, projeto, categoria, subcategoria, 
-            patrimonio, andar_sala, ip, resumo, descricao, impacto, prazo_sla
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        """
-        valores = (
-            dados_chamado.get("protocolo", ""),
-            dados_chamado.get("solicitante", ""),
-            dados_chamado.get("projeto", ""),
-            dados_chamado.get("categoria", ""),
-            dados_chamado.get("subcategoria", ""),
-            dados_chamado.get("patrimonio", ""),
-            dados_chamado.get("andar_sala", ""),
-            dados_chamado.get("ip", ""),
-            dados_chamado.get("resumo", ""),
-            dados_chamado.get("descricao", ""),
-            dados_chamado.get("impacto", "Baixo"),
-            dados_chamado.get("prazo_sla", "24 horas"),
-        )
+    def _inserir_pessoas_iniciais(self):
+        """Cadastra os usuários padrão caso o banco esteja novo."""
+        if len(self.listar_pessoas()) == 0:
+            p1 = {
+                "nome": "Charles Ferreira de Moura",
+                "cargo": "Dev Junior",
+                "email": "charles@empresa.com",
+                "telefone": "61 9999-9999",
+                "data_admissao": "01/08/2024",
+                "projeto": "MCTI, COPASA",
+                "senha": "123",
+            }
+            p2 = {
+                "nome": "Ana Carolina",
+                "cargo": "Analista de Dados",
+                "email": "ana@colaboradores.empresa.com",
+                "telefone": "61 9991-1234",
+                "data_admissao": "01/01/2026",
+                "projeto": "MEC",
+                "senha": "123",
+            }
+            self.salvar_pessoa(p1)
+            self.salvar_pessoa(p2)
 
-        with self.conectar() as conn:
+    # ==========================================================================
+    # 👤 MÉTODOS DE PESSOAS (PERSISTÊNCIA)
+    # ==========================================================================
+    def salvar_pessoa(self, pessoa_dict):
+        """Insere um novo colaborador no banco SQLite."""
+        with self.get_connection() as conn:
             cursor = conn.cursor()
-            cursor.execute(query, valores)
+            cursor.execute(
+                """
+                INSERT INTO pessoas (nome, cargo, email, telefone, data_admissao, projeto, senha)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+            """,
+                (
+                    pessoa_dict["nome"],
+                    pessoa_dict["cargo"],
+                    pessoa_dict["email"],
+                    pessoa_dict["telefone"],
+                    pessoa_dict["data_admissao"],
+                    pessoa_dict["projeto"],
+                    pessoa_dict["senha"],
+                ),
+            )
             conn.commit()
             return cursor.lastrowid
 
-    def listar_chamados(self):
-        """Busca todos os chamados salvos."""
-        query = "SELECT * FROM chamados ORDER BY id DESC"
-        with self.conectar() as conn:
+    def listar_pessoas(self):
+        """Retorna todas as pessoas cadastradas no banco como uma lista de dicionários."""
+        with self.get_connection() as conn:
+            conn.row_factory = sqlite3.Row  # Permite acessar colunas pelo nome
             cursor = conn.cursor()
-            cursor.execute(query)
-            colunas = [descricao[0] for descricao in cursor.description]
+            cursor.execute("SELECT * FROM pessoas ORDER BY nome ASC")
             linhas = cursor.fetchall()
-            return [dict(zip(colunas, linha)) for linha in linhas]
+            return [dict(linha) for linha in linhas]
+
+    def buscar_pessoa_por_login(self, email, senha):
+        """Valida e-mail e senha no banco de dados para realizar o login."""
+        with self.get_connection() as conn:
+            conn.row_factory = sqlite3.Row
+            cursor = conn.cursor()
+            cursor.execute(
+                "SELECT * FROM pessoas WHERE LOWER(email) = LOWER(?) AND senha = ?",
+                (email.strip(), senha),
+            )
+            linha = cursor.fetchone()
+            return dict(linha) if linha else None
+
+    # ==========================================================================
+    # 🎫 MÉTODOS DE CHAMADOS
+    # ==========================================================================
+    def salvar_chamado(self, chamado):
+        """Insere um novo chamado no banco de dados."""
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                """
+                INSERT INTO chamados (protocolo, solicitante, projeto, categoria, subcategoria, resumo, patrimonio, andar_sala, ip, descricao, impacto, prazo_sla)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+                (
+                    chamado.get("protocolo"),
+                    chamado.get("solicitante"),
+                    chamado.get("projeto"),
+                    chamado.get("categoria"),
+                    chamado.get("subcategoria"),
+                    chamado.get("resumo"),
+                    chamado.get("patrimonio"),
+                    chamado.get("andar_sala"),
+                    chamado.get("ip"),
+                    chamado.get("descricao"),
+                    chamado.get("impacto"),
+                    chamado.get("prazo_sla"),
+                ),
+            )
+            conn.commit()
+            return cursor.lastrowid
+
+    def obter_proximo_id(self):
+        """Retorna o próximo ID incremental para gerar o protocolo amigável."""
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                "SELECT seq FROM sqlite_sequence WHERE name='chamados'"
+            )
+            linha = cursor.fetchone()
+            return (linha[0] + 1) if linha else 1
+
+    def listar_chamados(self):
+        """Retorna a lista completa de chamados em ordem do mais recente para o mais antigo."""
+        with self.get_connection() as conn:
+            conn.row_factory = sqlite3.Row
+            cursor = conn.cursor()
+            cursor.execute("SELECT * FROM chamados ORDER BY id DESC")
+            linhas = cursor.fetchall()
+            return [dict(linha) for linha in linhas]
