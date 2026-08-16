@@ -6,11 +6,50 @@ from app.pessoas import GerenciadorPessoas, Pessoa
 from app.portfolios import GerenciadorPortfolios
 
 # ==============================================================================
+# FUNÇÃO DE CONTROLE DE PERMISSÕES (RBAC)
+# ==============================================================================
+def obter_nivel_permissao():
+    """Retorna o nível de acesso do usuário logado: 'admin', 'supervisor' ou 'operador'."""
+    usuario = st.session_state.get("usuario_logado")
+    if not usuario:
+        return "visitante"
+
+    cargo = usuario.get("cargo", "").lower()
+
+    # Define as palavras-chave para cada perfil
+    if any(
+        p in cargo
+        for p in ["gestor", "gerente", "diretor", "dev", "admin", "teste"]
+    ):
+        return "admin"
+    elif any(p in cargo for p in ["supervisor", "coordenador", "lider"]):
+        return "supervisor"
+    else:
+        return "operador"
+# ==============================================================================
 # 🔹 CONFIGURAÇÕES INICIAIS DA APLICAÇÃO
 # ==============================================================================
+
 st.set_page_config(
     page_title="GLOBAL WEB FACTORY", page_icon=":robot_face:", layout="wide"
 )
+
+# 1.2. Inicialização da Memória da Sessão (Garante as variáveis no session_state)
+if "usuario_logado" not in st.session_state:
+    st.session_state.usuario_logado = None
+
+if "menu_selecionado" not in st.session_state:
+    st.session_state.menu_selecionado = "🏠 Início"
+# ==============================================================================
+# 2. REDIRECIONAMENTO AUTOMÁTICO POR PERFIL DE ACESSO
+# ==============================================================================
+if st.session_state.get("usuario_logado") is not None:
+    nivel_atual = obter_nivel_permissao()
+
+    # Se for operador, força a abertura na tela de Chamados na primeira carga
+    if nivel_atual == "operador" and "redirecionado" not in st.session_state:
+        st.session_state.menu_selecionado = "🎫 Abertura de Chamado"
+        st.session_state.redirecionado = True
 
 # ==============================================================================
 # 🔹 INICIALIZAÇÃO DA MEMÓRIA DA SESSÃO (SESSION STATE)
@@ -134,21 +173,91 @@ if menu == "🏠 Início":
 
         st.markdown("---")
 
-        # Cartões de Resumo das Funcionalidades
+        # ----------------------------------------------------------------------
+        # 📊 1. BUSCA E FILTRO UNIFICADO DE CONTRATOS (HUB OMNICHANNEL)
+        # ----------------------------------------------------------------------
+        chamados_todos = st.session_state.db.listar_chamados()
+
+        # Lista de projetos para o filtro unificado
+        projetos_disponiveis = [
+            "Todos os Contratos",
+            "MCTI",
+            "COPASA",
+            "START CAOA",
+            "MEC",
+            "Globalweb",
+        ]
+
+        # Filtro no topo da visão do supervisor
+        col_filtro1, col_filtro2 = st.columns([2, 1])
+        with col_filtro1:
+            st.subheader("🏢 Visão Geral dos Contratos Integrados")
+        with col_filtro2:
+            contrato_selecionado = st.selectbox(
+                "Filtrar por Cliente/Contrato:", projetos_disponiveis
+            )
+
+        # Aplica o filtro na lista de chamados
+        if contrato_selecionado != "Todos os Contratos":
+            chamados_banco = [
+                c
+                for c in chamados_todos
+                if c.get("projeto") == contrato_selecionado
+            ]
+        else:
+            chamados_banco = chamados_todos
+
+        # Calculando indicadores reais para os Cards
+        total_chamados = len(chamados_banco)
+        chamados_urgentes = sum(
+            1
+            for c in chamados_banco
+            if c.get("impacto") in ["Crítico / Alta", "Alto"]
+        )
+
+        # ----------------------------------------------------------------------
+        # 📈 2. CARDS DE INDICADORES (KPIs REAIS)
+        # ----------------------------------------------------------------------
+        kpi1, kpi2, kpi3 = st.columns(3)
+
+        with kpi1:
+            st.metric(
+                label="Total de Chamados",
+                value=total_chamados,
+                delta=contrato_selecionado,
+            )
+        with kpi2:
+            st.metric(
+                label="Impacto Crítico / Alto",
+                value=chamados_urgentes,
+                delta_color="inverse",
+            )
+        with kpi3:
+            st.metric(
+                label="Status do Contrato",
+                value="Operacional",
+                delta="Hub Ativo",
+            )
+
+        st.markdown("---")
+
+        # ----------------------------------------------------------------------
+        # 👤 3. SEUS DADOS DE ACESSO E AÇÕES RÁPIDAS
+        # ----------------------------------------------------------------------
         c1, c2 = st.columns(2)
         with c1:
             st.info(f"""
-            ### 👥 Seus Dados de Acesso
-            * **E-mail:** {usuario['email']}
-            * **Projetos Atribuídos:** `{usuario['projeto']}`
-            """)
+                    ### 👤 Seus Dados de Acesso
+                    * **E-mail:** {usuario['email']}
+                    * **Projetos Atribuídos:** `{usuario['projeto']}`
+                    """)
 
         with c2:
             st.success("""
-            ### 🎫 Atendimento Ativo
-            * Utilize o menu lateral para **Abertura de Chamados**.
-            * Acompanhe os SLAs na aba de **Histórico de Chamados**.
-            """)
+                    ### 🎫 Atendimento Ativo
+                    * Utilize o menu lateral para **Abertura de Chamados**.
+                    * Acompanhe os SLAs na aba de **Histórico de Chamados**.
+                    """)
 
         st.markdown("---")
 
@@ -302,15 +411,19 @@ if menu == "🏠 Início":
 # TELA 1: LISTAGEM DE PESSOAS
 # ------------------------------------------------------------------------------
 elif menu == "📋 Listar Pessoas":
-    st.title("Pessoas Cadastradas")
-    st.write(
-        "Visualização completa da equipe cadastrada no banco de dados."
+    st.title("📋 Gestão e Listagem de Colaboradores")
+    st.caption(
+        "Visualização centralizada da equipe e edição de dados cadastrais."
     )
 
-    # 🟢 Puxa os colaboradores diretamente do SQLite
+    # 1. Busca colaboradores do banco de dados
     pessoas_banco = st.session_state.db.listar_pessoas()
 
+    # Identifica o nível de acesso do usuário logado
+    nivel_acesso = obter_nivel_permissao()
+
     if pessoas_banco:
+        # Exibe a tabela principal de visualização para Supervisores e Gestores/Admin
         st.dataframe(
             pessoas_banco,
             use_container_width=True,
@@ -321,253 +434,574 @@ elif menu == "📋 Listar Pessoas":
                 "email": "E-mail",
                 "telefone": "Telefone",
                 "data_admissao": "Admissão",
-                "projeto": "Projetos Atribuídos",
-                "senha": None,  # Oculta a senha da tabela por segurança
+                "projeto": "Contratos Atribuídos",
+                "senha": None,  # Oculta a senha
             },
             hide_index=True,
         )
-    else:
-        st.info("Nenhuma pessoa encontrada no banco de dados.")
 
+        st.markdown("---")
+
+        # ----------------------------------------------------------------------
+        # ✏️ SEÇÃO DE EDIÇÃO (LIBERADA APENAS PARA ADMIN / GESTOR / DEV)
+        # ----------------------------------------------------------------------
+        st.subheader("✏️ Alterar Cadastro de Colaborador")
+
+
+        if nivel_acesso == "admin":
+            # Lista padronizada de cargos para manter a coerência do RBAC
+            lista_cargos_padrao = [
+                "Gestor de TI",
+                "Coordenador de Operações",
+                "Dev / Analista de Sistemas",
+                "Supervisor de Atendimento",
+                "Líder Técnico",
+                "Analista de Suporte",
+                "Operador de Call Center",
+                "Técnico de Campo",
+            ]
+
+            # Dicionário formatado de colaboradores
+            opcoes_pessoas = {
+                f"#{p['id']} - {p['nome']} ({p['cargo']})": p
+                for p in pessoas_banco
+            }
+
+            pessoa_selecionada_chave = st.selectbox(
+                "Selecione o colaborador que deseja editar:",
+                options=list(opcoes_pessoas.keys()),
+            )
+
+            if pessoa_selecionada_chave:
+                pessoa_dados = opcoes_pessoas[pessoa_selecionada_chave]
+
+                # Identifica o cargo atual para pré-selecionar no dropdown
+                cargo_atual = pessoa_dados.get("cargo", "")
+                index_cargo = 0
+                for idx, c in enumerate(lista_cargos_padrao):
+                    if c in cargo_atual:
+                        index_cargo = idx
+                        break
+
+                # --------------------------------------------------------------
+                # 📝 FORMULÁRIO 1: ALTERAÇÃO DE DADOS CADASTRAIS
+                # --------------------------------------------------------------
+                with st.form("form_editar_pessoa"):
+                    col_e1, col_e2 = st.columns(2)
+
+                    with col_e1:
+                        edit_nome = st.text_input(
+                            "Nome Completo",
+                            value=str(pessoa_dados.get("nome", "")),
+                        )
+                        edit_cargo_sel = st.selectbox(
+                            "Cargo / Função Corporativa",
+                            options=lista_cargos_padrao,
+                            index=index_cargo,
+                        )
+                        edit_cargo_comp = st.text_input(
+                            "Especificação da Função (Opcional)",
+                            placeholder="Ex: Nível 2 / Noite",
+                        )
+                        edit_email = st.text_input(
+                            "E-mail Corporativo",
+                            value=str(pessoa_dados.get("email", "")),
+                        )
+
+                    with col_e2:
+                        edit_telefone = st.text_input(
+                            "Telefone",
+                            value=str(pessoa_dados.get("telefone", "")),
+                        )
+                        edit_admissao = st.text_input(
+                            "Data Admissão",
+                            value=str(pessoa_dados.get("data_admissao", "")),
+                        )
+
+                        projetos_existentes = [
+                            p.strip()
+                            for p in str(
+                                pessoa_dados.get("projeto", "MCTI")
+                            ).split(",")
+                            if p.strip()
+                        ]
+                        edit_projetos = st.multiselect(
+                            "Projetos / Contratos de Atuação",
+                            [
+                                "MCTI",
+                                "MEC",
+                                "COPASA",
+                                "Globalweb",
+                                "Start Caoa",
+                            ],
+                            default=projetos_existentes,
+                        )
+
+                    btn_salvar_edicao = st.form_submit_button(
+                        "💾 Salvar Alterações no Cadastro"
+                    )
+
+                    if btn_salvar_edicao:
+                        cargo_final = (
+                            f"{edit_cargo_sel} - {edit_cargo_comp}"
+                            if edit_cargo_comp
+                            else edit_cargo_sel
+                        )
+                        string_proj = ", ".join(edit_projetos)
+
+                        dados_atualizados = {
+                            "nome": edit_nome,
+                            "cargo": cargo_final,
+                            "email": edit_email,
+                            "telefone": edit_telefone,
+                            "data_admissao": edit_admissao,
+                            "projeto": string_proj,
+                        }
+
+                        st.session_state.db.atualizar_pessoa(
+                            pessoa_dados["id"], dados_atualizados
+                        )
+                        st.success(
+                            f"✅ Cadastro de **{edit_nome}** atualizado com sucesso!"
+                        )
+                        st.rerun()
+
+                # --------------------------------------------------------------
+                # 🔑 FORMULÁRIO 2: RESET DE SENHA (INDEPENDENTE E SEPARADO)
+                # --------------------------------------------------------------
+                st.markdown("---")
+                st.subheader("🔑 Redefinição de Senha Corporativa")
+                st.caption(
+                    "Funcionalidade restrita a Gestores e Devs para suporte e reset de credenciais."
+                )
+
+                with st.form("form_alterar_senha_admin"):
+                    col_s1, col_s2 = st.columns([2, 1])
+
+                    with col_s1:
+                        nova_senha_input = st.text_input(
+                            "Nova Senha de Acesso",
+                            type="password",
+                            placeholder="Digite a nova senha...",
+                        )
+
+                    with col_s2:
+                        st.write("")
+                        st.write("")
+                        btn_redefinir_senha = st.form_submit_button(
+                            "🔒 Redefinir Senha"
+                        )
+
+                    if btn_redefinir_senha:
+                        if nova_senha_input:
+                            st.session_state.db.alterar_senha_pessoa(
+                                pessoa_dados["id"], nova_senha_input
+                            )
+                            st.success(
+                                f"✅ Senha do colaborador **{pessoa_dados['nome']}** redefinida no banco!"
+                            )
+                            st.balloons()
+                        else:
+                            st.warning(
+                                "⚠️ Digite uma nova senha válida antes de salvar."
+                            )
+
+        elif nivel_acesso == "supervisor":
+            st.info(
+                "🔒 **Acesso restrito para edição:** Supervisores podem visualizar a lista de colaboradores, mas alterações cadastrais são permitidas apenas para **Gestores e Administradores**."
+            )
+
+        else:
+            st.warning(
+                "⚠️ Operadores não possuem permissão para alterar cadastros de equipe."
+            )
+
+    else:
+        st.info("Nenhum colaborador encontrado na base.")
 # ------------------------------------------------------------------------------
 # TELA 2: CADASTRO DE PESSOAS (Com seleção de múltiplos projetos)
 # ------------------------------------------------------------------------------
 elif menu == "👤 Cadastrar Pessoa":
     st.title("Cadastrar Novo Colaborador")
-    st.write(
-        "Preencha as informações abaixo para adicionar a pessoa à equipe."
-    )
+    st.caption("Preencha as informações abaixo para adicionar a pessoa à equipe.")
 
-    with st.form("form_cadastro_pessoa"):
+    # 🔒 Validação de Permissão
+    nivel_atual = obter_nivel_permissao()
+    if nivel_atual != "admin":
+        st.warning(
+            "⚠️ **Acesso Restrito:** Apenas **Gestores, Administradores e Devs** podem cadastrar novos colaboradores.")
+        st.stop()
+
+    with st.form("form_cadastrar_pessoa_menu"):
         col1, col2 = st.columns(2)
 
         with col1:
             nome = st.text_input("Nome Completo")
-            cargo = st.text_input("Cargo")
-            email = st.text_input("E-mail")
+
+            # Lista padronizada para garantir a regra do RBAC
+            cargo_selecionado = st.selectbox(
+                "Cargo / Função Corporativa",
+                [
+                    "Gestor de TI",
+                    "Coordenador de Operações",
+                    "Dev / Analista de Sistemas",
+                    "Supervisor de Atendimento",
+                    "Líder Técnico",
+                    "Analista de Suporte",
+                    "Operador de Call Center",
+                    "Técnico de Campo"
+                ]
+            )
+            cargo_complemento = st.text_input("Especificação da Função (Opcional)", placeholder="Ex: Nível 2 / Noite")
+            cargo_final = f"{cargo_selecionado} - {cargo_complemento}" if cargo_complemento else cargo_selecionado
+
+            email = st.text_input("E-mail Corporativo")
             telefone = st.text_input("Telefone / Celular")
 
         with col2:
-            data_admissao = st.text_input("Data Admissão (ex: 01/08/2026)")
-
-            # 🟢 [PARTE 1] Permite selecionar múltiplos projetos para o mesmo usuário
-            projetos_selecionados = st.multiselect(
+            data_admissao = st.text_input("Data Admissão (ex: 16/08/2026)")
+            projetos = st.multiselect(
                 "Projetos / Contratos de Atuação",
                 ["MCTI", "MEC", "COPASA", "Globalweb", "Start Caoa"],
-                default=["MCTI"],
+                default=["MCTI"]
             )
             senha = st.text_input("Senha de acesso", type="password")
 
-        btn_salvar = st.form_submit_button("Cadastrar Colaborador")
+        btn_cadastrar = st.form_submit_button("✨ Confirmar e Salvar Cadastro")
 
-        if btn_salvar:
-            if nome and email and projetos_selecionados:
-                # Converte a lista selecionada em texto separado por vírgula
-                string_projetos = ", ".join(projetos_selecionados)
-                nova_p = Pessoa(
-                    nome,
-                    cargo,
-                    email,
-                    telefone,
-                    data_admissao,
-                    string_projetos,
-                    senha,
-                )
-                st.session_state.gerenciador.adicionar(nova_p)
-                st.success(
-                    f"✅ Novo Colaborador '{nome}' cadastrado com sucesso nos projetos: **{string_projetos}**!"
-                )
+        if btn_cadastrar:
+            if nome and email and senha and projetos:
+                string_proj = ", ".join(projetos)
+
+                nova_pessoa_dict = {
+                    "nome": nome,
+                    "cargo": cargo_final,
+                    "email": email,
+                    "telefone": telefone,
+                    "data_admissao": data_admissao,
+                    "projeto": string_proj,
+                    "senha": senha
+                }
+
+                try:
+                    st.session_state.db.salvar_pessoa(nova_pessoa_dict)
+                    st.success(f"✅ Colaborador **{nome}** (`{cargo_final}`) cadastrado no banco com sucesso!")
+                except Exception as e:
+                    st.error(f"⚠️ Erro ao cadastrar colaborador: {e}")
             else:
-                st.warning(
-                    "⚠️ Preencha Nome, E-mail e escolha pelo menos 1 Projeto para continuar."
-                )
+                st.warning("⚠️ Preencha Nome, E-mail, Senha e escolha pelo menos 1 Projeto.")
 
 # ------------------------------------------------------------------------------
 # TELA 3: ABERTURA DE CHAMADO (Reativa ao usuário e calculando SLA)
 # ------------------------------------------------------------------------------
 elif menu == "🎫 Abertura de Chamado":
-    st.title("🎫 Abertura Guiada de Chamados")
-    st.write("Gere Scripts padronizados de suporte para os portfólios ativos.")
+    st.title("🎫 Abertura Rápida e Inteligente de Chamado")
+    st.caption(
+        "Triagem reativa com IA, geração de scripts técnicos e pré-visualização"
+        " antes do registro."
+    )
 
-    # 🟢 [PARTE 1] Identificação do Solicitante e Filtro Reativo de Projetos
-    pessoas_cadastradas = st.session_state.gerenciador.pessoas
+    # 1. IDENTIFICAÇÃO DO PROJETO E SOLICITANTE
+    pessoas_banco = (
+        st.session_state.db.listar_pessoas()
+        if hasattr(st.session_state.db, "listar_pessoas")
+        else []
+    )
 
-    if pessoas_cadastradas:
-        opcoes_pessoas = [
-            f"{p.nome} ({p.cargo} | Projetos: {p.projeto})"
-            for p in pessoas_cadastradas
-        ]
-        pessoa_selecionada = st.selectbox(
-            "👤 Selecione o Solicitante Cadastrado:",
-            options=opcoes_pessoas,
-            key="sb_solicitante_chamado",
+    col_p1, col_p2 = st.columns(2)
+    with col_p1:
+        proj_escolhido = st.selectbox(
+            "🏢 Projeto / Contrato do Cliente",
+            ["MCTI", "COPASA", "MEC", "START CAOA", "Globalweb"],
+            key="sb_projeto_atendimento",
+        )
+    with col_p2:
+        opcoes_solic = (
+            [
+                f"{p['nome']} ({p.get('cargo', 'Cliente')})"
+                for p in pessoas_banco
+            ]
+            if pessoas_banco
+            else []
+        )
+        opcoes_solic.append("➕ Digitar Nome Manualmente")
+
+        solic_sel = st.selectbox(
+            "👤 Solicitante (Cliente / Servidor)",
+            options=opcoes_solic,
+            key="sb_solic_clean",
         )
 
-        idx = opcoes_pessoas.index(pessoa_selecionada)
-        objeto_pessoa = pessoas_cadastradas[idx]
-        solicitante = objeto_pessoa.nome
-
-        # Extrai somente os projetos em que esta pessoa específica está cadastrada
-        projetos_usuario = [
-            proj.strip() for proj in objeto_pessoa.projeto.split(",")
-        ]
-    else:
-        st.warning(
-            "⚠️ Nenhuma pessoa cadastrada. Usando lista geral de projetos."
-        )
-        solicitante = st.text_input("Nome do Solicitante", value="Charles")
-        projetos_usuario = gerenciador_port.contratos
+        if "➕ Digitar" in solic_sel:
+            solicitante_final = st.text_input(
+                "Nome do Solicitante",
+                placeholder="Digite o nome completo...",
+                key="txt_solic_manual",
+            )
+        else:
+            solicitante_final = solic_sel.split(" (")[0]
 
     st.markdown("---")
 
-    # 🏢 1. Seleção do Projeto (Filtrado reativamente pelos projetos do usuário!)
-    proj_escolhido = st.selectbox(
-        "Selecione o Projeto do Chamado",
-        projetos_usuario,
-        key="sb_projeto_atendimento",
+    # 2. FUNÇÃO AUXILIAR DE PROCESSAMENTO DA IA
+    def processar_relato_ia():
+        relato = st.session_state.get("input_relato_ia", "")
+        if relato.strip():
+            sugestao = agent_ai.classificar_chamado(
+                relato,
+                gerenciador_port.contratos,
+                gerenciador_port.categorias_tecnicas,
+            )
+            cat = sugestao.get("categoria", "Outros")
+            subcat = sugestao.get("subcategoria", "Geral")
+
+            st.session_state["sugestao_cat"] = cat
+            st.session_state["sugestao_subcat"] = subcat
+
+            # Trata o texto para o Resumo Curto
+            relato_limpo = (
+                relato.replace("infotma", "informa")
+                .replace("solciita", "solicita")
+                .replace("nao consegue", "não consegue")
+                .strip()
+            )
+            st.session_state["txt_resumo_conf"] = (
+                f"Solicitação de {subcat} - {relato_limpo[:60]}"
+            )
+
+            # Gera a descrição técnica limpa e padronizada
+            st.session_state["ta_desc_conf"] = agent_ai.polir_descricao(
+                texto_bruto=relato, categoria=cat, subcategoria=subcat
+            )
+
+    # Entrada de Texto Livre
+    st.text_area(
+        "📝 O que o cliente/servidor relatou? (Texto Livre)",
+        placeholder="Ex: Colaboradora informa que não consegue acessar a pasta de rede COPASA...",
+        height=100,
+        key="input_relato_ia",
+        on_change=processar_relato_ia,
     )
 
-    # ⚡ SEÇÃO DE IA: Auto-Categorização por Texto Livre
-    with st.expander(
-        "✨ Preenchimento Inteligente com IA (Opcional)", expanded=True
-    ):
-        relato_bruto = st.text_area(
-            "Descreva o problema ou necessidade em texto livre:",
-            placeholder="Ex: A impressora do 4º andar do MCTI parou de funcionar e está dando erro de rede.",
-            key="input_relato_ia",
-        )
-        if st.button("🤖 Analisar e Preencher Campos com IA"):
-            if relato_bruto.strip():
-                sugestao = agent_ai.classificar_chamado(
-                    relato_bruto,
-                    gerenciador_port.contratos,
-                    gerenciador_port.categorias_tecnicas,
-                )
-                if sugestao:
-                    st.session_state["sb_categoria_atendimento"] = sugestao.get(
-                        "categoria"
-                    )
-                    st.session_state["sb_subcategoria_atendimento"] = (
-                        sugestao.get("subcategoria")
-                    )
-
-                    st.success(
-                        f"💡 **IA sugeriu:** {sugestao.get('justificativa', 'Análise concluída!')}"
-                    )
-                    st.info(
-                        f"📋 **Sugestão:** {sugestao.get('contrato')} ➔ {sugestao.get('categoria')} ➔ {sugestao.get('subcategoria')}"
-                    )
+    # ⚡ BOTÃO PRINCIPAL DA IA LOGO ABAIXO DO TEXTO LIVRE
+    col_b1, col_b2 = st.columns([1, 2])
+    with col_b1:
+        if st.button(
+            "✨ Analisar e Processar com IA",
+            type="primary",
+            use_container_width=True,
+        ):
+            if st.session_state.get("input_relato_ia", "").strip():
+                processar_relato_ia()
+                st.success("✨ IA processou o relato e ajustou o chamado!")
+                st.rerun()
             else:
                 st.warning(
-                    "⚠️ Digite uma descrição do problema antes de chamar a IA."
+                    "⚠️ Digite o relato do cliente no campo acima antes de"
+                    " acionar a IA."
                 )
+    with col_b2:
+        st.caption(
+            "Clique para preencher as categorias e gerar o laudo técnico"
+            " instantaneamente."
+        )
 
     st.markdown("---")
 
-    # 📁 2. Seleção de Categoria e Subcategoria
+    if (
+        st.session_state.get("input_relato_ia", "").strip()
+        and "sugestao_cat" not in st.session_state
+    ):
+        processar_relato_ia()
+
+    # 3. SELEÇÃO DE CATEGORIAS (ALINHAMENTO DA IA)
     categorias = list(gerenciador_port.categorias_tecnicas.keys())
-    cat_escolhida = st.selectbox(
-        "Selecione a Categoria", categorias, key="sb_categoria_atendimento"
-    )
+    cat_sug = st.session_state.get("sugestao_cat")
+
+    idx_cat = 0
+    if cat_sug:
+        for i, c in enumerate(categorias):
+            if (
+                cat_sug.lower() in c.lower()
+                or c.lower() in cat_sug.lower()
+                or ("acesso" in cat_sug.lower() and "acesso" in c.lower())
+            ):
+                idx_cat = i
+                break
+
+    col_cat1, col_cat2, col_cat3 = st.columns(3)
+
+    with col_cat1:
+        cat_escolhida = st.selectbox(
+            "📁 Categoria (IA)", categorias, index=idx_cat, key="sb_cat_conf"
+        )
 
     subcategorias = gerenciador_port.categorias_tecnicas.get(
-        cat_escolhida, ["Outros"]
+        cat_escolhida, ["Geral"]
     )
-    subcat_escolhida = st.selectbox(
-        "Selecione a Subcategoria",
-        subcategorias,
-        key="sb_subcategoria_atendimento",
-    )
+    subcat_sug = st.session_state.get("sugestao_subcat")
 
-    # ⚡ [PARTE 1] Seleção de Impacto & Regra Automática de SLA
-    col_imp, col_sla = st.columns(2)
-    with col_imp:
+    idx_subcat = 0
+    if subcat_sug:
+        for i, sc in enumerate(subcategorias):
+            if (
+                subcat_sug.lower() in sc.lower()
+                or sc.lower() in subcat_sug.lower()
+            ):
+                idx_subcat = i
+                break
+
+    with col_cat2:
+        subcat_escolhida = st.selectbox(
+            "📂 Subcategoria (IA)",
+            subcategorias,
+            index=idx_subcat,
+            key="sb_subcat_conf",
+        )
+
+    with col_cat3:
         impacto_escolhido = st.select_slider(
-            "Impacto da Demanda no Trabalho",
+            "⚠️ Impacto",
             options=["Baixo", "Médio", "Alto"],
             value="Baixo",
-            key="sel_impacto",
+            key="slider_impacto_conf",
         )
-
-    # Regra de Negócio de SLA
-    regras_sla = {"Alto": "02 horas", "Médio": "08 horas", "Baixo": "24 horas"}
-    prazo_sla_calculado = regras_sla.get(impacto_escolhido, "24 horas")
-
-    with col_sla:
-        st.info(f"⏱️ **SLA Previsto de Atendimento:** {prazo_sla_calculado}")
-
-    resumo = st.text_input("Resumo Curto da Demanda")
-
-    # 🏢 3. Campos de Infraestrutura
-    col_pat, col_sala, col_ip = st.columns(3)
-    with col_pat:
-        patrimonio = st.text_input(
-            "Número do Patrimônio/EST", key="input_patrimonio"
-        )
-    with col_sala:
-        andar_sala = st.text_input("Andar / Sala", key="input_andar_sala")
-    with col_ip:
-        endereco_ip = st.text_input(
-            "Endereço IP (opcional)", key="input_ip_maquina"
-        )
+        regras_sla = {"Alto": "02 horas", "Médio": "08 horas", "Baixo": "24 horas"}
+        prazo_sla = regras_sla.get(impacto_escolhido, "24 horas")
 
     st.markdown("---")
 
-    # 🪄 4. Polidor Técnico com IA
-    st.markdown("### 📝 Detalhamento para o Suporte Técnico")
-    if st.button("🪄 Polir e Padronizar Texto com IA"):
-        if relato_bruto.strip():
-            texto_formatado = agent_ai.polir_descricao(
-                texto_bruto=relato_bruto,
-                categoria=cat_escolhida,
-                subcategoria=subcat_escolhida,
-            )
-            st.session_state["texto_descricao_polida"] = texto_formatado
-            st.success("✨ Texto padronizado e checklist gerado com sucesso!")
-        else:
-            st.warning("⚠️ Escreva algo no relato inicial para poder polir.")
+    if "txt_resumo_conf" not in st.session_state:
+        st.session_state["txt_resumo_conf"] = ""
+    if "ta_desc_conf" not in st.session_state:
+        st.session_state["ta_desc_conf"] = ""
 
-    descricao_final = st.text_area(
-        "Descrição Técnica Final (Editável):",
-        value=st.session_state.get("texto_descricao_polida", relato_bruto),
-        height=180,
-        key="ta_descricao_final",
+    resumo_final = st.text_input(
+        "📌 Resumo Curto da Demanda",
+        placeholder="Resumo gerado automaticamente pela IA...",
+        key="txt_resumo_conf",
     )
 
+    descricao_final = st.text_area(
+        "📄 Descrição Técnica Final (Gerada pela IA / Editável)",
+        height=220,
+        key="ta_desc_conf",
+    )
+
+    # 4. CAMPOS COMPLEMENTARES ORGANIZADOS
+    with st.expander(
+        "🛠️ Informações Complementares (Aprovador, Patrimônio, IP e Sala)"
+    ):
+        col_c1, col_c2 = st.columns(2)
+        with col_c1:
+            superior_imediato = st.text_input(
+                "👔 Superior Imediato / Aprovador",
+                placeholder="Ex: Dr. Carlos Mendes - Chefe de TI",
+                key="txt_aprovador",
+            )
+            patrimonio = st.text_input(
+                "💻 Nº Patrimônio / EST",
+                placeholder="Ex: EST-9948",
+                key="txt_patrimonio",
+            )
+        with col_c2:
+            andar_sala = st.text_input(
+                "📍 Andar / Sala",
+                placeholder="Ex: 4º Andar - Sala 402",
+                key="txt_sala",
+            )
+            endereco_ip = st.text_input(
+                "🌐 Endereço IP", placeholder="Ex: 192.168.1.50", key="txt_ip"
+            )
+
     st.markdown("---")
 
-    # 🚀 [PARTE 1] Botão de Registro com Geração de Protocolo Formatado
-    if st.button("🚀 Criar e Registrar Chamado", type="primary"):
-        if resumo.strip() and descricao_final.strip():
-            # Gera protocolo amigável no padrão PROJETO-2026-000X
-            proximo_id = st.session_state.db.obter_proximo_id()
-            protocolo_gerado = f"{proj_escolhido}-2026-{proximo_id:04d}"
+    # 5. PRÉ-VISUALIZAÇÃO DO TICKET
+    st.subheader("👁️ Pré-visualização do Ticket de Atendimento")
 
+    proximo_id = (
+        st.session_state.db.obter_proximo_id()
+        if hasattr(st.session_state.db, "obter_proximo_id")
+        else 1
+    )
+    protocolo_previsto = f"{proj_escolhido}-2026-{proximo_id:04d}"
+
+    with st.container(border=True):
+        col_v1, col_v2, col_v3 = st.columns(3)
+        with col_v1:
+            st.markdown(f"**Protocolo:** `{protocolo_previsto}`")
+            st.markdown(
+                f"**Solicitante:** {solicitante_final if solicitante_final else 'N/A'}"
+            )
+            st.markdown(f"**Projeto:** `{proj_escolhido}`")
+
+        with col_v2:
+            st.markdown(f"**Categoria:** {cat_escolhida}")
+            st.markdown(f"**Subcategoria:** {subcat_escolhida}")
+            st.markdown(f"**SLA Previsto:** `{prazo_sla}`")
+
+        with col_v3:
+            st.markdown(
+                f"**Aprovador:** {superior_imediato if superior_imediato else 'N/A'}"
+            )
+            st.markdown(f"**Patrimônio/EST:** {patrimonio if patrimonio else 'N/A'}")
+            st.markdown(
+                f"**Operador:** `{st.session_state.usuario_logado.get('nome', 'Operador') if st.session_state.usuario_logado else 'Operador'}`"
+            )
+
+        st.markdown("---")
+        st.markdown(
+            f"**Resumo:** {resumo_final if resumo_final else '*Aguardando resumo da IA...*'}"
+        )
+        st.caption("Laudo Técnico Gerado:")
+        st.code(
+            descricao_final
+            if descricao_final
+            else "Aguardando relato do cliente para a IA gerar o laudo...",
+            language="markdown",
+        )
+
+    st.write("")
+
+    # 6. REGISTRO NO BANCO SQLITE
+    if st.button(
+        "🚀 Confirmar e Registrar Chamado no Banco",
+        type="primary",
+        use_container_width=True,
+    ):
+        if solicitante_final and resumo_final.strip() and descricao_final.strip():
             novo_chamado = {
-                "protocolo": protocolo_gerado,
-                "solicitante": solicitante,
+                "protocolo": protocolo_previsto,
+                "solicitante": solicitante_final,
+                "superior_imediato": superior_imediato,
                 "projeto": proj_escolhido,
                 "categoria": cat_escolhida,
                 "subcategoria": subcat_escolhida,
-                "resumo": resumo,
+                "resumo": resumo_final,
                 "patrimonio": patrimonio,
                 "andar_sala": andar_sala,
                 "ip": endereco_ip,
                 "descricao": descricao_final,
                 "impacto": impacto_escolhido,
-                "prazo_sla": prazo_sla_calculado,
+                "prazo_sla": prazo_sla,
+                "operador": (
+                    st.session_state.usuario_logado.get("nome", "Operador")
+                    if st.session_state.usuario_logado
+                    else "Operador"
+                ),
+                "status": "Aberto",
             }
 
-            # Salva no Banco de Dados SQLite
             st.session_state.db.salvar_chamado(novo_chamado)
-
             st.balloons()
             st.success(
-                f"✅ **Chamado {protocolo_gerado} registrado com sucesso para {solicitante}! (SLA: {prazo_sla_calculado})**"
+                f"✅ Chamado **{protocolo_previsto}** criado com sucesso no"
+                f" banco de dados para **{solicitante_final}**!"
             )
         else:
             st.error(
-                "❌ Preencha pelo menos o Resumo Curto e a Descrição Técnica para abrir o chamado."
+                "⚠️ Preencha o Solicitante, o Resumo e a Descrição antes de"
+                " registrar o chamado."
             )
 
 # ------------------------------------------------------------------------------

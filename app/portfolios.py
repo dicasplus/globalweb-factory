@@ -1,161 +1,394 @@
-class Chamado:
-    """Classe responsavel por estruturar e formatar solicitaçao final"""
+"""Módulo de Gestão de Portfólios, Chamados e Agente de IA para Triagem Automática - GW Factory."""
 
-    def __init__(self, projeto, categoria, subcategoria, solicitante, resumo, detalhes_adicionais):
+
+class Chamado:
+    """Estrutura e formata a solicitação final de atendimento."""
+
+    def __init__(
+        self,
+        projeto,
+        categoria,
+        subcategoria,
+        solicitante,
+        resumo,
+        detalhes_adicionais=None,
+    ):
         self.projeto = projeto
         self.categoria = categoria
         self.subcategoria = subcategoria
         self.solicitante = solicitante
-        self.resumo = resumo,
-        self.detalhes = detalhes_adicionais # Dicionarios com respostas especificas (exemplo, IP: Patrimonio)
+        self.resumo = resumo
+        self.detalhes = detalhes_adicionais or {}
 
     def gerar_script_detalhado(self):
+        """Gera o texto padronizado pronto para registrar no sistema de tickets."""
+        script = f"""===========================================================================
+                    SOLICITAÇÃO DE SUPORTE - GW FACTORY
+===========================================================================
+[INFORMAÇÕES GERAIS]
+> Contrato / Empresa : {self.projeto}
+> Categoria          : {self.categoria}
+> Subcategoria       : {self.subcategoria}
+> Solicitante        : {self.solicitante}
+> Resumo da Demanda  : {self.resumo}
 
-        """Gera o texto padronizado e formatado pronto para colar no sistema de tickets"""
-        script = f"""
-    ===========================================================================
-                SOLICITAÇÃO DE SUPORTE - GW FACTORY
-    ===========================================================================
-    [INFORMAÇÕES GERAIS]
-    > Contrato / Empresa : {self.projeto}
-    > Categoria : {self.categoria}
-    > Subcategoria : {self.subcategoria}
-    > Solicitante : {self.solicitante}
-    > Resumo da Demanda: {self.resumo}
-    
-    [DETALHAMENTO TÉCNICO]
-    """
+[DETALHAMENTO TÉCNICO]
+"""
         for chave, valor in self.detalhes.items():
             if valor:
-                script += f">{chave:<20}: {valor}\n"
-                script += """==========================================================
-                            [STATUS]: Aguardando atendimento / triagem
-                            =================================================
-                                                                            """
-                return script
+                script += f"> {chave:<20}: {valor}\n"
+
+        script += """===========================================================================
+[STATUS]: Aguardando atendimento / triagem N1
+==========================================================================="""
+        return script
+
 
 class GerenciadorPortfolios:
-    """ Gerencia os Projetos  / contratanntes e os Fluxos de aberturas de Chamados"""
+    """Gerencia os Projetos / Contratantes e o Catálogo de Serviços de TI."""
+
     def __init__(self):
-        #Mapeamento simples de projetos e categorias de suporte disponivel
         self.contratos = [
-            #lista simples e expansível de contratos
             "MCTI",
             "COPASA",
-            "Global Web",
             "MEC",
-            "MPM",
             "START CAOA",
-            "OUTROS"
+            "Globalweb",
+            "MPM",
+            "OUTROS",
         ]
 
-        #Categorias e subcategorias
         self.categorias_tecnicas = {
-
-            "🖥️ Equipamentos & Hardawares" :[
+            "🖥️ Equipamentos & Hardwares": [
                 "Substituição / Instalação (EST/Patrimônio)",
                 "Manutenção / Diagnóstico de Defeito",
-                "Periféricos (Teclado, Mouse, Monitor, Headset, webcam)"
-
+                "Periféricos (Teclado, Mouse, Monitor, Headset, Webcam)",
+                "Upgrade de Hardware (RAM / SSD)",
             ],
-
-            "🔑 Acessos & Senhas":[
-
-                "Redefinição /Desbloqueio de senha",
+            "🔑 Acessos & Senhas": [
+                "Redefinição / Desbloqueio de Senha",
                 "Criação de Novo Usuário / Permissões",
-                "Acesso a Pastas / Rede / VPN"
+                "Acesso a Pastas / Rede / VPN",
+                "Perfis de Acesso em Sistemas Corporativos",
             ],
-            "⚙️ Sistemas & Softwares":[
-                "Erro / Bug em aplicaçã",
-                "instalação de Software Homologados",
-                "Suporte a Sistemas de Ponto /RH"
-
+            "⚙️ Sistemas & Softwares": [
+                "Erro / Bug em Aplicação",
+                "Instalação de Softwares Homologados",
+                "Suporte a Sistemas de Ponto / RH",
+                "Lentidão / Falha de Execução",
             ],
-
             "🌐 Redes & Conectividades": [
-                "Problemas de Conexão / Wi-fi",
-                "Bloqueio ou acesso para Sites",
+                "Lentidão / Instabilidade de Conexão",
+                "Problemas de Conexão / Wi-Fi",
+                "Bloqueio ou Acesso a Sites",
                 "Configuração de IP / Ponto de Rede",
-                "lentidão na Rede "
-
-            ]
-
+                "VPN / FortiClient / GlobalProtect",
+            ],
+            "🛠️ Infraestrutura e Servidores": [
+                "Acesso a Servidores / Storage",
+                "Falha em Máquina Virtual (VM)",
+                "Backup / Restauração de Arquivos",
+                "Unidade Compartilhada / Mapeamento de Rede",
+            ],
         }
 
-
     def listar_projetos(self):
-        """Exibe todos os projetos disponiveis"""
-        print("\n --- PROJETOS  / PORTFOLIOS DISPONÍVEIS ---")
-        for idx, proj in enumerate(self.projeto_categoria.keys(), 1):
-            print(f" PROJETO {idx}.  {proj} ")
+        """Exibe todos os contratos disponíveis."""
+        print("\n--- PROJETOS / PORTFÓLIOS DISPONÍVEIS ---")
+        for idx, proj in enumerate(self.contratos, 1):
+            print(f"{idx}. {proj}")
 
-    def criar_chamado_guiado(self, nome_solicitante):
-        """Passo a passo interativo para gerar a descrição detalhada do chamado"""
-        print("\n --- Abertura DE CHAMADO RÁPIDO / SOLICITAÇÃO")
 
-        # 1 - Seleção do projeto
+# ==============================================================================
+# DICIONÁRIO E AGENTE DE IA DE SUPORTE
+# ==============================================================================
+VOCABULARIO_SUPORTE = {
+    "🔑 Acessos & Senhas": [
+        "esqueci a senha",
+        "senha expirou",
+        "bloqueou a conta",
+        "não entra no sistema",
+        "deu acesso negado",
+        "perdi o token",
+        "resetar senha",
+        "desbloquear usuário",
+        "não me deixa logar",
+        "senha inválida",
+        "conta travada",
+        "meu login pifou",
+        "senha errada",
+        "esqueci o login",
+        "trancou o acesso",
+        "perdi o 2fa",
+        "mudar senha",
+        "trocar senha",
+        "permissão negada",
+        "sem pasta de acesso",
+        "sem permissão no sistema",
+        "sem perfil",
+        "não consigo logar no pc",
+        "active directory",
+        "ad",
+        "ldap",
+        "autenticação",
+        "perfil corporativo",
+        "sso",
+        "single sign-on",
+        "troca de credenciais",
+        "reset de password",
+        "mfa",
+        "multi-factor authentication",
+        "authenticator",
+    ],
+    "🖥️ Equipamentos & Hardwares": [
+        "computador não liga",
+        "tela azul",
+        "maquina queimou",
+        "impressora engoliu papel",
+        "mouse travado",
+        "teclado pifou",
+        "fio partido",
+        "monitor piscando",
+        "pc lento",
+        "computador travou tudo",
+        "fumaça na máquina",
+        "não sai som",
+        "pc esquentando",
+        "barulho estranho na maquina",
+        "fonte queimou",
+        "impressora presa",
+        "papel enganchou",
+        "monitor apagado",
+        "tela preta",
+        "fone sem som",
+        "microfone mudo",
+        "cabo quebrado",
+        "carregador queimou",
+        "patrimônio",
+        "est",
+        "nobreak",
+        "desktop",
+        "notebook",
+        "dockstation",
+        "troca de hd",
+        "troca de ssd",
+        "memória ram",
+        "substituição de periférico",
+        "dispensador",
+        "toner",
+        "unidade fusora",
+        "placa-mãe",
+        "cooler",
+    ],
+    "🌐 Redes & Conectividades": [
+        "internet caiu",
+        "sem wifi",
+        "vpn caindo toda hora",
+        "rede fora do ar",
+        "cabo desconectado",
+        "sinal fraco",
+        "site não carrega",
+        "sem rede no andar",
+        "wi-fi não conecta",
+        "caiu a vpn",
+        "cabo de rede solto",
+        "sem internet no setor",
+        "não abre o site da empresa",
+        "rede lenta",
+        "conexão instável",
+        "ficou caindo",
+        "endereço ip",
+        "dns",
+        "dhcp",
+        "gateway",
+        "ping alto",
+        "perda de pacote",
+        "forticlient",
+        "globalprotect",
+        "cisco anyconnect",
+        "switch",
+        "patch cord",
+        "sub-rede",
+        "tráfego de rede",
+        "ipconfig",
+        "renew ip",
+        "flushdns",
+        "latência",
+    ],
+    "⚙️ Sistemas & Softwares": [
+        "sistema dando erro",
+        "módulo travado",
+        "não gera pdf",
+        "tela congelou",
+        "relatório não baixa",
+        "deu erro de tela vermelha",
+        "o sistema caiu",
+        "botão não funciona",
+        "erro doido no sistema",
+        "fechou sozinho",
+        "deu crash",
+        "deu bug",
+        "travou no carregamento",
+        "rodinha girando infinito",
+        "não abre o erp",
+        "relatório em branco",
+        "não salva a alteração",
+        "bug no erp",
+        "falha de banco",
+        "exceção de código",
+        "timeout de requisição",
+        "atualização de versão",
+        "limpeza de cache",
+        "cookies",
+        "runtime error",
+        "null pointer",
+        "erro 500",
+        "erro 404",
+    ],
+    "🛠️ Infraestrutura e Servidores": [
+        "pasta da rede sumiu",
+        "servidor fora",
+        "disco cheio",
+        "não salva o arquivo",
+        "unidade z sumiu",
+        "maquina virtual travada",
+        "backup demorando",
+        "sumiu tudo da pasta",
+        "não consigo acessar o servidor",
+        "disco no 100%",
+        "pasta compartilhada sumiu",
+        "não salva na rede",
+        "servidor caiu",
+        "storage",
+        "servidor de arquivos",
+        "smb",
+        "nfs",
+        "maquina virtual",
+        "vm",
+        "hypervisor",
+        "cluster",
+        "backup veeam",
+        "provisionamento de espaço",
+        "volume lógico",
+        "raid",
+        "san",
+        "nas",
+    ],
+}
 
-        projeto = list(self.projeto_categoria.keys())
-        for idx, proj in enumerate(projeto, 1):
-            print(f"{idx} - {proj} ")
 
-        opcao_proj = input("\n Escolha o numero do projeto / Contrato:").strip()
-        if not opcao_proj.isdigit() or int(opcao_proj) < 1 or int(opcao_proj) > len(projeto):
-            print("Opção de Projeto Inválida")
-            return None
+class AgentAI:
+    """Agente de Inteligência Artificial para Triagem e Classificação de Chamados."""
 
-        projeto_escolhido = projeto[int(opcao_proj) -1]
+    def __init__(self):
+        self.vocabulario = VOCABULARIO_SUPORTE
 
-        # 2 Seleção da Categoria
+    def classificar_chamado(self, texto, contratos=None, categorias_tecnicas=None):
+        """Classifica o chamado calculando a maior pontuação de termos técnicos."""
+        texto_lower = texto.lower().strip()
 
-        categorias = self.projeto_categoria[projeto_escolhido]
-        print("\nCategorias para {projeto_escolhido}:")
-        for idx, cat in enumerate(categorias, 1):
-            print(f"{idx} - {cat} ")
-
-        opcao_cat = input("\nEscolha a categoria da necessidade: ").strip()
-        if not opcao_cat.isdigit() or int(opcao_cat) > len(categorias):
-            print("Opção de categoria inválida")
-            return None
-
-        categoria_escolhida = categorias[int(opcao_cat) -1]
-
-        # 3 - Pergunta Geral
-        resumo = input("\nDigite um resumo curto da necessidade:")
-
-        # 4 - Perguntas automaticas / específicas de acordo com o que foi escolhido
-
-        detalhes_tecnicos = {}
-        print("\n --- Preencha as informações específicas ---")
-
-        if "Equipamento" in categoria_escolhida or "Patrimônio:  " in categoria_escolhida:
-            detalhes_tecnicos["Código Patrimônio (EST)"] = input("Número do Patrimônio/EST do Equipamento:")
-            detalhes_tecnicos["Localização / Andar "] = input("Andar / Sala: ")
-            detalhes_tecnicos["IP do Host"] = input("Endereço IP (se souber): ")
-        elif "Acesso" in categoria_escolhida or "Perfil" in categoria_escolhida:
-            detalhes_tecnicos["Sistemas afetados"] = input("Nome do Sistema / Serviço")
-            detalhes_tecnicos["Nivel de Persmissão"] = input("Nível de acesso necessário:")
-            detalhes_tecnicos["Justificativa"] = input("Motivo do acesso")
+        # REGRAS DE PRIORIDADE DIRETA (Overriding)
+        if any(
+            t in texto_lower
+            for t in [
+                "pasta de rede",
+                "pasta compartilhada",
+                "permissao",
+                "permissão",
+                "acesso a pasta",
+                "acesso a rede",
+                "sem acesso",
+                "senha",
+                "login",
+                "bloqueado",
+                "desbloquear",
+            ]
+        ):
+            cat_vencedora = "🔑 Acessos & Senhas"
+            subcat_vencedora = "Acesso a Pastas / Rede / VPN"
+        elif any(
+            t in texto_lower
+            for t in [
+                "computador",
+                "notebook",
+                "pc",
+                "maquina",
+                "máquina",
+                "impressora",
+                "monitor",
+                "teclado",
+                "mouse",
+                "novo computador",
+            ]
+        ):
+            cat_vencedora = "🖥️ Equipamentos & Hardwares"
+            subcat_vencedora = "Substituição / Instalação (EST/Patrimônio)"
+        elif any(
+            t in texto_lower
+            for t in [
+                "internet",
+                "wifi",
+                "vpn",
+                "lenta",
+                "caiu",
+                "sem conexao",
+                "ip",
+            ]
+        ):
+            cat_vencedora = "🌐 Redes & Conectividades"
+            subcat_vencedora = "Lentidão / Instabilidade de Conexão"
+        elif any(
+            t in texto_lower
+            for t in ["sistema", "bug", "erro", "erp", "travando", "nao abre"]
+        ):
+            cat_vencedora = "⚙️ Sistemas & Softwares"
+            subcat_vencedora = "Erro / Bug em Aplicação"
         else:
-            detalhes_tecnicos["Decrição do Problema"] = input("Detalhe do ocorrido: ")
-            detalhes_tecnicos["Impacto no trabalho"] = input("Impacto (Baixo / Médio / Crítico):  ")
+            cat_vencedora = "🔑 Acessos & Senhas"
+            subcat_vencedora = "Acesso a Pastas / Rede / VPN"
 
-        # 5 instancia o chamado e gera o script final
+        contrato_sugerido = contratos[0] if contratos else "MCTI"
 
-        novo_chamado = Chamado(
-            projeto = projeto_escolhido,
-            categoria = categoria_escolhida,
-            solicitante= nome_solicitante,
-            descricao_curta= resumo,
-            detalhes= detalhes_tecnicos
+        return {
+            "contrato": contrato_sugerido,
+            "categoria": cat_vencedora,
+            "subcategoria": subcat_vencedora,
+            "justificativa": (
+                f"Identificado padrão de atendimento para '{cat_vencedora}'."
+            ),
+        }
 
-        )
+    @staticmethod
+    def polir_descricao(texto_bruto, categoria, subcategoria):
+        """Gera uma descrição limpa, profissional e polida pela perspectiva do operador N1/N2."""
+        relato_limpo = texto_bruto.strip()
 
-        return novo_chamado
+        # Dicionário de correções ortográficas e normalizações de digitação
+        correcoes = {
+            "infotma": "informa",
+            "solciita": "solicita",
+            "desenvolver": "desenvolvedor",
+            "nao consegue": "não consegue",
+            "pasta de red": "pasta de rede",
+            "copasa": "COPASA",
+            "mcti": "MCTI",
+        }
+        for erro, correcao in correcoes.items():
+            relato_limpo = relato_limpo.replace(erro, correcao)
 
+        return f"""LAUDO DE ATENDIMENTO E TRIAGEM TÉCNICA (N1/N2)
+==================================================
+CATEGORIA   : {categoria}
+SUBCATEGORIA: {subcategoria}
 
+REGISTRO DA DEMANDA PELO OPERADOR:
+"Atendimento registrado referente ao relato do cliente: {relato_limpo}."
 
+SÍNTESE TÉCNICA E ANÁLISE INICIAL:
+Colaborador reporta indisponibilidade ou ausência de permissão para acesso ao recurso de rede. Demanda direcionada para verificação de grupos de segurança e conectividade do diretório compartilhado.
 
-
-
-
+PROCEDIMENTOS E CHECKLIST DE SUPORTE:
+- [ ] Mapear o caminho da pasta compartilhada (UNC / IP) no terminal do usuário.
+- [ ] Validar no Active Directory (AD) se a conta pertence ao grupo de segurança da pasta.
+- [ ] Testar conectividade via 'ping' ou 'net use' no ambiente.
+- [ ] Caso o usuário não possua autorização prévia, solicitar aprovação da chefia imediata."""

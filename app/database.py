@@ -172,3 +172,168 @@ class DatabaseManager:
             cursor.execute("SELECT * FROM chamados ORDER BY id DESC")
             linhas = cursor.fetchall()
             return [dict(linha) for linha in linhas]
+
+    # ==========================================================================
+    # ✏️ ATUALIZAÇÃO DE CADASTRO DE PESSOA (SQLITE)
+    # ==========================================================================
+    def atualizar_pessoa(self, id_pessoa, pessoa_dict):
+        """Atualiza os dados de um colaborador existente pelo ID."""
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                """
+                UPDATE pessoas 
+                SET nome = ?, cargo = ?, email = ?, telefone = ?, data_admissao = ?, projeto = ?
+                WHERE id = ?
+            """,
+                (
+                    pessoa_dict["nome"],
+                    pessoa_dict["cargo"],
+                    pessoa_dict["email"],
+                    pessoa_dict["telefone"],
+                    pessoa_dict["data_admissao"],
+                    pessoa_dict["projeto"],
+                    id_pessoa,
+                ),
+            )
+            conn.commit()
+            return cursor.rowcount
+
+        # ==========================================================================
+        # 🔑 ALTERAÇÃO DE SENHA (SQLITE)
+        # ==========================================================================
+
+    def alterar_senha_pessoa(self, id_pessoa, nova_senha):
+        """Atualiza a senha de um colaborador pelo ID."""
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                """
+                UPDATE pessoas 
+                SET senha = ?
+                WHERE id = ?
+            """,
+                (nova_senha, id_pessoa),
+            )
+            conn.commit()
+            return cursor.rowcount
+
+        # ==========================================================================
+        # 🎫 FINALIZAÇÃO E ATUALIZAÇÃO DE CHAMADO (SQLITE)
+        # ==========================================================================
+
+    def finalizar_chamado(
+            self,
+            id_chamado,
+            status,
+            motivo_finalizacao,
+            parecer_operador,
+            parecer_torre,
+    ):
+        """Grava a resolução do chamado com os pareceres do operador e da torre externa."""
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            # Garante que as colunas existam ou atualiza os dados
+            cursor.execute(
+                """
+                UPDATE chamados 
+                SET status = ?, 
+                    motivo_finalizacao = ?, 
+                    solucao_operador = ?, 
+                    solucao_torre = ?
+                WHERE id = ?
+            """,
+                (
+                    status,
+                    motivo_finalizacao,
+                    parecer_operador,
+                    parecer_torre,
+                    id_chamado,
+                ),
+            )
+            conn.commit()
+            return cursor.rowcount
+
+        # ==========================================================================
+        # 👥 GERADOR DE SERVIDORES / CLIENTES AUTOMÁTICOS POR PROJETO
+        # ==========================================================================
+
+    def popular_clientes_automaticos(self):
+        """Popula o banco com cerca de 20 servidores/clientes caso a base esteja vazia."""
+        pessoas_existentes = self.listar_pessoas()
+        if len(pessoas_existentes) > 2:
+            return  # Já possui cadastros suficientes
+
+        clientes_iniciais = [
+            # MCTI - Ministério da Ciência, Tecnologia e Inovações
+            {"nome": "Dra. Maria Helena Souza", "cargo": "Coordenadora de Pesquisa",
+             "email": "maria.souza@mcti.gov.br", "telefone": "(61) 98111-2001", "data_admissao": "10/01/2019",
+             "projeto": "MCTI"},
+            {"nome": "Roberto Carlos Andrade", "cargo": "Analista em C&T", "email": "roberto.andrade@mcti.gov.br",
+             "telefone": "(61) 98111-2002", "data_admissao": "15/03/2020", "projeto": "MCTI"},
+            {"nome": "Patricia Lima e Silva", "cargo": "Chefe de Gabinete", "email": "patricia.silva@mcti.gov.br",
+             "telefone": "(61) 98111-2003", "data_admissao": "01/02/2018", "projeto": "MCTI"},
+            {"nome": "Fernando Dias Santos", "cargo": "Técnico Administrativo",
+             "email": "fernando.santos@mcti.gov.br", "telefone": "(61) 98111-2004", "data_admissao": "20/06/2021",
+             "projeto": "MCTI"},
+
+            # COPASA - Companhia de Saneamento de MG
+            {"nome": "Eng. Gustavo Barbosa", "cargo": "Engenheiro Operacional",
+             "email": "gustavo.barbosa@copasa.com.br", "telefone": "(31) 99222-3001", "data_admissao": "12/04/2017",
+             "projeto": "COPASA"},
+            {"nome": "Juliana Martins Costa", "cargo": "Supervisora de Estação",
+             "email": "juliana.costa@copasa.com.br", "telefone": "(31) 99222-3002", "data_admissao": "05/08/2020",
+             "projeto": "COPASA"},
+            {"nome": "Marcelo Resende Viana", "cargo": "Técnico de Saneamento",
+             "email": "marcelo.viana@copasa.com.br", "telefone": "(31) 99222-3003", "data_admissao": "11/11/2022",
+             "projeto": "COPASA"},
+            {"nome": "Luciana Ribeiro Neves", "cargo": "Analista Financeira",
+             "email": "luciana.neves@copasa.com.br", "telefone": "(31) 99222-3004", "data_admissao": "03/01/2021",
+             "projeto": "COPASA"},
+
+            # MEC - Ministério da Educação
+            {"nome": "Prof. Eduardo Oliveira", "cargo": "Diretor de Programas",
+             "email": "eduardo.oliveira@mec.gov.br", "telefone": "(61) 98333-4001", "data_admissao": "02/05/2016",
+             "projeto": "MEC"},
+            {"nome": "Camila Guimarães Rocha", "cargo": "Coordenadora Pedagógica",
+             "email": "camila.rocha@mec.gov.br", "telefone": "(61) 98333-4002", "data_admissao": "14/09/2019",
+             "projeto": "MEC"},
+            {"nome": "Rodrigo Mendes Faria", "cargo": "Analista de Políticas Públicas",
+             "email": "rodrigo.faria@mec.gov.br", "telefone": "(61) 98333-4003", "data_admissao": "08/07/2021",
+             "projeto": "MEC"},
+            {"nome": "Aline Castro Vasconcelos", "cargo": "Secretária Executiva",
+             "email": "aline.castro@mec.gov.br", "telefone": "(61) 98333-4004", "data_admissao": "19/10/2020",
+             "projeto": "MEC"},
+
+            # START CAOA
+            {"nome": "Thiago Alcantara Monteiro", "cargo": "Gerente de Vendas",
+             "email": "thiago.monteiro@startcaoa.com.br", "telefone": "(11) 97444-5001",
+             "data_admissao": "01/03/2022", "projeto": "START CAOA"},
+            {"nome": "Vanessa Teixeira Prado", "cargo": "Consultora de Pós-Venda",
+             "email": "vanessa.prado@startcaoa.com.br", "telefone": "(11) 97444-5002",
+             "data_admissao": "15/01/2023", "projeto": "START CAOA"},
+            {"nome": "Bruno Henrique Xavier", "cargo": "Supervisor de Peças",
+             "email": "bruno.xavier@startcaoa.com.br", "telefone": "(11) 97444-5003", "data_admissao": "10/08/2021",
+             "projeto": "START CAOA"},
+            {"nome": "Beatriz Nogueira Ramos", "cargo": "Analista de Garantia",
+             "email": "beatriz.ramos@startcaoa.com.br", "telefone": "(11) 97444-5004",
+             "data_admissao": "04/04/2022", "projeto": "START CAOA"},
+
+            # GLOBALWEB (Interno / Matriz)
+            {"nome": "Alexandre Pires Toledo", "cargo": "Gerente de Contratos",
+             "email": "alexandre.toledo@globalweb.com.br", "telefone": "(61) 99555-6001",
+             "data_admissao": "01/01/2018", "projeto": "Globalweb"},
+            {"nome": "Daniela Freitas Borges", "cargo": "Coordenadora de Service Desk",
+             "email": "daniela.borges@globalweb.com.br", "telefone": "(61) 99555-6002",
+             "data_admissao": "12/06/2020", "projeto": "Globalweb"},
+            {"nome": "Gabriel Junqueira Paiva", "cargo": "Especialista de Infraestrutura",
+             "email": "gabriel.paiva@globalweb.com.br", "telefone": "(61) 99555-6003",
+             "data_admissao": "03/09/2021", "projeto": "Globalweb"},
+            {"nome": "Fernanda Esteves Garcia", "cargo": "Analista de Qualidade",
+             "email": "fernanda.garcia@globalweb.com.br", "telefone": "(61) 99555-6004",
+             "data_admissao": "18/02/2023", "projeto": "Globalweb"}
+        ]
+
+        for c in clientes_iniciais:
+            c["senha"] = "123456"
+            self.salvar_pessoa(c)
