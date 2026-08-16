@@ -53,23 +53,51 @@ agent_ai = st.session_state.agent_ai
 
 
 # ==============================================================================
-# 🔹 MENU DE NAVEGAÇÃO LATERAL
+# MENU DE NAVEGAÇÃO LATERAL (Condicional de Autenticação)
 # ==============================================================================
-st.sidebar.title("GlobalWeb Factory")
-st.sidebar.markdown("---")
+# 1. Garante que as variáveis do controle de sessão existam
+if "usuario_logado" not in st.session_state:
+    st.session_state.usuario_logado = None
 
-menu = st.sidebar.radio(
-    "Navegação",
-    [
-        "🏠 Início",
-        "📋 Listar Pessoas",
-        "👤 Cadastrar Pessoa",
-        "🎫 Abertura de Chamado",
-        "📊 Histórico de Chamados",
-        "📁 Projetos / Portfólios",
-    ],
-)
+if "menu_selecionado" not in st.session_state:
+    st.session_state.menu_selecionado = "🏠 Início"
 
+# 2. Se NÃO estiver logado, esconde a barra lateral e fixa a tela em Início
+if st.session_state.usuario_logado is None:
+    menu = "🏠 Início"
+else:
+    # 🟢 USUÁRIO LOGADO: Desenha a barra lateral completa
+    with st.sidebar:
+        st.image("logo.png", use_container_width=True)
+
+        usuario = st.session_state.usuario_logado
+        st.markdown(f"### 👤 {usuario['nome']}")
+        st.caption(f"Cargo: {usuario['cargo']}")
+        st.markdown("---")
+
+        opcoes_menu = [
+            "🏠 Início",
+            "📋 Listar Pessoas",
+            "👤 Cadastrar Pessoa",
+            "🎫 Abertura de Chamado",
+            "📊 Histórico de Chamados",
+            "📁 Projetos / Portfólios",
+        ]
+
+        menu = st.radio(
+            "Navegação",
+            opcoes_menu,
+            index=opcoes_menu.index(st.session_state.menu_selecionado),
+        )
+        st.session_state.menu_selecionado = menu
+
+        st.markdown("---")
+
+        # Botão rápido de Logout na própria barra lateral
+        if st.button("🚪 Sair da Conta", type="secondary"):
+            st.session_state.usuario_logado = None
+            st.session_state.menu_selecionado = "🏠 Início"
+            st.rerun()
 # ------------------------------------------------------------------------------
 # TELA 0: INÍCIO
 # ------------------------------------------------------------------------------
