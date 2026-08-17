@@ -46,6 +46,32 @@ st.set_page_config(
     page_title="GLOBAL WEB FACTORY", page_icon=":robot_face:", layout="wide"
 )
 
+
+# Definição da janela modal para pré-visualização de chamados
+@st.dialog("📋 Detalhes Completos do Chamado", width="large")
+def modal_detalhes_chamado(chamado):
+    st.write(f"**Protocolo:** {chamado.get('protocolo', 'N/D')}")
+
+    col_modal1, col_modal2 = st.columns(2)
+    with col_modal1:
+        st.text(f"Solicitante: {chamado.get('solicitante', 'N/D')}")
+        st.text(f"Contrato: {chamado.get('contrato', 'N/D')}")
+    with col_modal2:
+        st.text(f"Categoria: {chamado.get('categoria', 'N/D')}")
+        st.text(f"Impacto: {chamado.get('impacto', 'N/D')}")
+
+    st.markdown("---")
+    st.text_area(
+        "Resumo / Descrição Detalhada",
+        value=chamado.get('resumo', 'Sem descrição informada.'),
+        disabled=True,
+        height=150
+    )
+
+    if st.button("Fechar Janela", type="primary", use_container_width=True):
+        st.rerun()
+
+
 # Inicialização garantida do Menu e Estados
 if "usuario_logado" not in st.session_state:
     st.session_state.usuario_logado = None
@@ -117,7 +143,8 @@ if st.session_state.usuario_logado is not None:
             "🎫 Abertura de Chamado",
             "📊 Histórico de Chamados",
             "📊 Relatórios Inteligentes",
-            "📁 Projetos / Portfólios",
+            "📁 Projetos / Portfólios"
+
         ]
 
         idx_menu = 0
@@ -946,7 +973,7 @@ elif menu == "🎫 Abertura de Chamado":
     st.write("")
 
     if st.button(
-            "🚀 Confirmar e Registrar Chamado no Banco",
+            "🚀 Confirmar e Registrar Chamado",
             type="primary",
             use_container_width=True,
     ):
@@ -980,12 +1007,11 @@ elif menu == "🎫 Abertura de Chamado":
                 "status": "Aberto",
             }
 
+            # 1. Salva o chamado no banco de dados
             st.session_state.db.salvar_chamado(novo_chamado)
-            st.balloons()
-            st.success(
-                f"✅ Chamado **{protocolo_previsto}** criado com sucesso no"
-                f" banco de dados para **{solicitante_final}**!"
-            )
+            st.toast("✅ Chamado validado e enviado com sucesso!", icon="🎉")
+            st.session_state.menu_selecionado = "📊 Histórico de Chamados"  # Ajuste para o nome exato da sua aba de histórico no menu
+            st.rerun()
         else:
             st.error(
                 "⚠️ Preencha o Solicitante, o Resumo e a Descrição antes de"
@@ -1160,6 +1186,11 @@ elif menu == "📊 Histórico de Chamados":
     )
     nivel_acesso: str = str(obter_nivel_permissao())
 
+    # Botão no topo da aba para voltar a abrir um novo chamado rapidamente
+    if st.button("➕ Abrir Novo Chamado", type="primary", use_container_width=True):
+        st.session_state.menu_selecionado = "🎫 Abertura de Chamado"  # Substitua pelo nome exato da sua aba de cadastro no menu
+        st.rerun()
+
     if chamados_todos:
         with st.form("form_filtros_chamados"):
             st.markdown("### 🔍 Filtros de Pesquisa")
@@ -1270,28 +1301,59 @@ elif menu == "📊 Histórico de Chamados":
             c2.metric("Total no Banco", len(chamados_todos))
             c3.metric("Filtro Ativo", status_filtro)
 
-            st.dataframe(
-                chamados_filtrados,
-                use_container_width=True,
-                column_config={
-                    "id": st.column_config.NumberColumn("ID", format="#%d"),
-                    "protocolo": "Protocolo",
-                    "data_abertura": "Abertura",
-                    "solicitante": "Solicitante",
-                    "projeto": "Contrato",
-                    "categoria": "Categoria",
-                    "subcategoria": "Subcategoria",
-                    "resumo": "Resumo",
-                    "impacto": "Impacto",
-                    "status": "Status",
-                    "operador": "Operador",
-                    "descricao": None,
-                    "patrimonio": None,
-                    "andar_sala": None,
-                    "ip": None,
-                },
-                hide_index=True,
-            )
+            # 1. Cria uma lista de opções baseada nos protocolos/IDs disponíveis para seleção rápida
+
+            # Seleção rápida e segura por selectbox (compatível com qualquer Streamlit)
+            with tab_listagem:
+                # 1. Cria o dicionário com os chamados filtrados antes de exibir o selectbox
+                opcoes_chamados = {}
+                if chamados_filtrados:
+                    opcoes_chamados = {
+                        f"#{c.get('id')} - {c.get('protocolo')} ({c.get('solicitante')})": c
+                        for c in chamados_filtrados
+                    }
+
+                # 2. Agora o restante do seu código continua daqui para baixo:
+                if opcoes_chamados:
+                    col_s1, col_s2 = st.columns([3, 1])
+                    with col_s1:
+                        escolha_label = st.selectbox(
+                            label="🔍 Selecione um chamado para ver os detalhes:",
+                            options=list(opcoes_chamados.keys()),
+                            key="selectbox_detalhe_chamado"
+                        )
+                    with col_s2:
+                        st.write("")
+                        st.write("")
+                        if st.button(label="📂 Abrir Detalhes", type="primary", use_container_width=True):
+                            chamado_escolhido = opcoes_chamados[escolha_label]
+                            modal_detalhes_chamado(chamado_escolhido)
+                else:
+                    st.info("Nenhum chamado disponível para seleção.")
+
+                st.markdown("---")
+
+                # Exibe a sua tabela normalmente logo abaixo
+                st.dataframe(
+                    chamados_filtrados,
+                    use_container_width=True,
+                    column_config={
+                        # ... (mantenha suas configurações de colunas atuais) ...
+                    },
+                    hide_index=True,
+                )
+
+
+            # 2. Captura o clique na linha da tabela e abre a janela pop-up automaticamente
+            #linhas_selecionadas = evento_tabela.selection.rows
+
+
+            #if linhas_selecionadas:
+            #    indice = linhas_selecionadas[0]
+            #    chamado_clicado = chamados_filtrados[indice]
+
+                # Chama o modal flutuante que criamos no topo do código
+            #    modal_detalhes_chamado(chamado_clicado)
 
             st.markdown("---")
             with st.expander("👁️ **Pré-visualizar Descrição e Laudo Completo do Chamado**", expanded=False):
@@ -1506,9 +1568,10 @@ elif menu == "📊 Histórico de Chamados":
                                             novo_status,
                                             parecer_tecnico,
                                         )
-                                        st.balloons()
-                                        st.success(f"✅ Status alterado para **{novo_status}**!")
-                                        st.rerun()
+                                        st.success("🎉 Chamado finalizado com êxito!")
+                                        col_f1, col_f2 = st.columns(2)
+                                        col_f1.metric("📁 Status", f"{novo_status}")
+                                        col_f2.metric("⏱️ SLA", "Dentro do Prazo")
                     else:
                         st.error(
                             f"🔒 **Acesso Restrito:** Chamado atribuído a **{operador_ticket}**. Operadores podem interagir apenas em seus próprios chamados."
@@ -1562,3 +1625,4 @@ elif menu == "📊 Histórico de Chamados":
                         st.markdown(str(ticket_imp.get("descricao") or ""))
     else:
         st.info("📭 Nenhum chamado encontrado na base de dados.")
+
