@@ -1,72 +1,78 @@
+"""Aplicação Web Principal - GlobalWeb Factory.
+
+Gerencia autenticação, controle de perfil (RBAC), navegação e abertura de
+chamados.
+"""
+
+from datetime import date, datetime
+from typing import Any, Dict, List, Optional
+
+import pandas as pd
 import streamlit as st
 
 from app.ai_agent import AgenteAtendimento
 from app.database import DatabaseManager
 from app.pessoas import GerenciadorPessoas, Pessoa
 from app.portfolios import GerenciadorPortfolios
+from app.reports import GerenciadorRelatorios
+
 
 # ==============================================================================
 # FUNÇÃO DE CONTROLE DE PERMISSÕES (RBAC)
 # ==============================================================================
-def obter_nivel_permissao():
+def obter_nivel_permissao() -> str:
     """Retorna o nível de acesso do usuário logado: 'admin', 'supervisor' ou 'operador'."""
-    usuario = st.session_state.get("usuario_logado")
-    if not usuario:
+    usuario_atual = st.session_state.get("usuario_logado")
+    if not usuario_atual or not isinstance(usuario_atual, dict):
         return "visitante"
 
-    cargo = usuario.get("cargo", "").lower()
+    cargo = str(usuario_atual.get("cargo") or "").lower()
 
-    # Define as palavras-chave para cada perfil
     if any(
-        p in cargo
-        for p in ["gestor", "gerente", "diretor", "dev", "admin", "teste"]
+            p in cargo
+            for p in ["gestor", "gerente", "diretor", "dev", "admin", "teste"]
     ):
         return "admin"
     elif any(p in cargo for p in ["supervisor", "coordenador", "lider"]):
         return "supervisor"
     else:
         return "operador"
-# ==============================================================================
-# 🔹 CONFIGURAÇÕES INICIAIS DA APLICAÇÃO
-# ==============================================================================
 
+
+# ==============================================================================
+# CONFIGURAÇÕES INICIAIS DA APLICAÇÃO
+# ==============================================================================
 st.set_page_config(
     page_title="GLOBAL WEB FACTORY", page_icon=":robot_face:", layout="wide"
 )
 
-# 1.2. Inicialização da Memória da Sessão (Garante as variáveis no session_state)
+# Inicialização garantida do Menu e Estados
 if "usuario_logado" not in st.session_state:
     st.session_state.usuario_logado = None
 
 if "menu_selecionado" not in st.session_state:
     st.session_state.menu_selecionado = "🏠 Início"
-# ==============================================================================
-# 2. REDIRECIONAMENTO AUTOMÁTICO POR PERFIL DE ACESSO
-# ==============================================================================
-if st.session_state.get("usuario_logado") is not None:
-    nivel_atual = obter_nivel_permissao()
 
-    # Se for operador, força a abertura na tela de Chamados na primeira carga
+# Redirecionamento por Perfil de Acesso
+if st.session_state.usuario_logado is not None:
+    nivel_atual = obter_nivel_permissao()
     if nivel_atual == "operador" and "redirecionado" not in st.session_state:
         st.session_state.menu_selecionado = "🎫 Abertura de Chamado"
         st.session_state.redirecionado = True
 
-# ==============================================================================
-# 🔹 INICIALIZAÇÃO DA MEMÓRIA DA SESSÃO (SESSION STATE)
-# ==============================================================================
+# Inicialização dos Gerenciadores de Banco e Classes
 if "db" not in st.session_state:
     st.session_state.db = DatabaseManager()
 
 if "gerenciador" not in st.session_state:
     st.session_state["gerenciador"] = GerenciadorPessoas()
-    # Pessoas iniciais para teste
     p1 = Pessoa(
         "Charles Ferreira de Moura",
         "Dev Junior",
         "charles@empresa.com",
         "61 9999-9999",
         "01/08/2024",
-        "MCTI, COPASA",  # Exemplo com múltiplos projetos
+        "MCTI, COPASA",
         "123456",
     )
     p2 = Pessoa(
@@ -87,31 +93,21 @@ if "gerenciador_portfolios" not in st.session_state:
 if "agent_ai" not in st.session_state:
     st.session_state.agent_ai = AgenteAtendimento()
 
-gerenciador_port = st.session_state.gerenciador_portfolios
-agent_ai = st.session_state.agent_ai
-
+gerenciador_port: GerenciadorPortfolios = st.session_state.gerenciador_portfolios
+agent_ai: AgenteAtendimento = st.session_state.agent_ai
 
 # ==============================================================================
-# MENU DE NAVEGAÇÃO LATERAL (Condicional de Autenticação)
+# MENU DE NAVEGAÇÃO LATERAL
 # ==============================================================================
-# 1. Garante que as variáveis do controle de sessão existam
-if "usuario_logado" not in st.session_state:
-    st.session_state.usuario_logado = None
+menu: str = str(st.session_state.get("menu_selecionado") or "🏠 Início")
 
-if "menu_selecionado" not in st.session_state:
-    st.session_state.menu_selecionado = "🏠 Início"
-
-# 2. Se NÃO estiver logado, esconde a barra lateral e fixa a tela em Início
-if st.session_state.usuario_logado is None:
-    menu = "🏠 Início"
-else:
-    # 🟢 USUÁRIO LOGADO: Desenha a barra lateral completa
+if st.session_state.usuario_logado is not None:
     with st.sidebar:
         st.image("logo.png", use_container_width=True)
 
-        usuario = st.session_state.usuario_logado
-        st.markdown(f"### 👤 {usuario['nome']}")
-        st.caption(f"Cargo: {usuario['cargo']}")
+        user_info: Dict[str, Any] = st.session_state.usuario_logado
+        st.markdown(f"### 👤 {str(user_info.get('nome') or 'Usuário')}")
+        st.caption(f"Cargo: {str(user_info.get('cargo') or 'N/A')}")
         st.markdown("---")
 
         opcoes_menu = [
@@ -120,43 +116,33 @@ else:
             "👤 Cadastrar Pessoa",
             "🎫 Abertura de Chamado",
             "📊 Histórico de Chamados",
+            "📊 Relatórios Inteligentes",
             "📁 Projetos / Portfólios",
         ]
 
-        menu = st.radio(
-            "Navegação",
-            opcoes_menu,
-            index=opcoes_menu.index(st.session_state.menu_selecionado),
-        )
+        idx_menu = 0
+        if st.session_state.menu_selecionado in opcoes_menu:
+            idx_menu = opcoes_menu.index(st.session_state.menu_selecionado)
+
+        menu = str(st.radio("Navegação", opcoes_menu, index=idx_menu))
         st.session_state.menu_selecionado = menu
 
         st.markdown("---")
 
-        # Botão rápido de Logout na própria barra lateral
         if st.button("🚪 Sair da Conta", type="secondary"):
             st.session_state.usuario_logado = None
             st.session_state.menu_selecionado = "🏠 Início"
             st.rerun()
+
 # ------------------------------------------------------------------------------
 # TELA 0: INÍCIO
 # ------------------------------------------------------------------------------
-# ------------------------------------------------------------------------------
-# TELA 0: INÍCIO (Com Login, Boas-Vindas e Cadastro rápido)
-# ------------------------------------------------------------------------------
 if menu == "🏠 Início":
 
-    # 1. Garante que o estado 'usuario_logado' exista na sessão do Streamlit
-    if "usuario_logado" not in st.session_state:
-        st.session_state.usuario_logado = None
-
-    # --------------------------------------------------------------------------
-    # 🌟 CENÁRIO A: USUÁRIO JÁ ESTÁ LOGADO
-    # --------------------------------------------------------------------------
     if st.session_state.usuario_logado is not None:
-        usuario = st.session_state.usuario_logado
+        usr_dados: Dict[str, Any] = st.session_state.usuario_logado
 
-        # Cabeçalho personalizado com o nome do colaborador
-        st.success(f"👋 Bem-vindo(a) de volta, **{usuario['nome']}**!")
+        st.success(f"👋 Bem-vindo(a) de volta, **{str(usr_dados.get('nome') or '')}**!")
 
         col1, col2, col3 = st.columns([1, 2, 1])
         with col2:
@@ -167,18 +153,15 @@ if menu == "🏠 Início":
             unsafe_allow_html=True,
         )
         st.markdown(
-            f"<h3 style='text-align: center; color:#888;'>Painel de Operações - {usuario['cargo']}</h3>",
+            "<h3 style='text-align: center; color:#888;'>Painel de Controle"
+            f" - {str(usr_dados.get('cargo') or '')}</h3>",
             unsafe_allow_html=True,
         )
 
         st.markdown("---")
 
-        # ----------------------------------------------------------------------
-        # 📊 1. BUSCA E FILTRO UNIFICADO DE CONTRATOS (HUB OMNICHANNEL)
-        # ----------------------------------------------------------------------
-        chamados_todos = st.session_state.db.listar_chamados()
+        chamados_todos: List[Dict[str, Any]] = st.session_state.db.listar_chamados()
 
-        # Lista de projetos para o filtro unificado
         projetos_disponiveis = [
             "Todos os Contratos",
             "MCTI",
@@ -188,7 +171,6 @@ if menu == "🏠 Início":
             "Globalweb",
         ]
 
-        # Filtro no topo da visão do supervisor
         col_filtro1, col_filtro2 = st.columns([2, 1])
         with col_filtro1:
             st.subheader("🏢 Visão Geral dos Contratos Integrados")
@@ -197,7 +179,6 @@ if menu == "🏠 Início":
                 "Filtrar por Cliente/Contrato:", projetos_disponiveis
             )
 
-        # Aplica o filtro na lista de chamados
         if contrato_selecionado != "Todos os Contratos":
             chamados_banco = [
                 c
@@ -207,7 +188,6 @@ if menu == "🏠 Início":
         else:
             chamados_banco = chamados_todos
 
-        # Calculando indicadores reais para os Cards
         total_chamados = len(chamados_banco)
         chamados_urgentes = sum(
             1
@@ -215,16 +195,13 @@ if menu == "🏠 Início":
             if c.get("impacto") in ["Crítico / Alta", "Alto"]
         )
 
-        # ----------------------------------------------------------------------
-        # 📈 2. CARDS DE INDICADORES (KPIs REAIS)
-        # ----------------------------------------------------------------------
         kpi1, kpi2, kpi3 = st.columns(3)
 
         with kpi1:
             st.metric(
                 label="Total de Chamados",
                 value=total_chamados,
-                delta=contrato_selecionado,
+                delta=str(contrato_selecionado),
             )
         with kpi2:
             st.metric(
@@ -241,15 +218,12 @@ if menu == "🏠 Início":
 
         st.markdown("---")
 
-        # ----------------------------------------------------------------------
-        # 👤 3. SEUS DADOS DE ACESSO E AÇÕES RÁPIDAS
-        # ----------------------------------------------------------------------
         c1, c2 = st.columns(2)
         with c1:
             st.info(f"""
                     ### 👤 Seus Dados de Acesso
-                    * **E-mail:** {usuario['email']}
-                    * **Projetos Atribuídos:** `{usuario['projeto']}`
+                    * **E-mail:** {str(usr_dados.get('email') or '')}
+                    * **Projetos Atribuídos:** `{str(usr_dados.get('projeto') or '')}`
                     """)
 
         with c2:
@@ -261,16 +235,11 @@ if menu == "🏠 Início":
 
         st.markdown("---")
 
-        # Botão para Encerrar a Sessão (Logout)
         if st.button("🚪 Sair do Sistema", type="secondary"):
             st.session_state.usuario_logado = None
-            st.rerun()  # Recarrega a tela imediatamente para atualizar o estado
+            st.rerun()
 
-    # --------------------------------------------------------------------------
-    # 🔑 CENÁRIO B: USUÁRIO AINDA NÃO FEZ LOGIN (Tela de Boas-Vindas)
-    # --------------------------------------------------------------------------
     else:
-        # Apresentação do Cabeçalho
         col1, col2, col3 = st.columns([1, 2, 1])
         with col2:
             st.image("logo.png", use_container_width=True)
@@ -280,20 +249,17 @@ if menu == "🏠 Início":
             unsafe_allow_html=True,
         )
         st.markdown(
-            "<h3 style='text-align: center; color:#888;'>Portal Único de Gestão e Suporte Integrado</h3>",
+            "<h3 style='text-align: center; color:#888;'>Portal Único de"
+            " Gestão e Suporte Integrado</h3>",
             unsafe_allow_html=True,
         )
 
         st.markdown("---")
 
-        # 🗂️ Abas para alternar entre Login e Novo Cadastro
         tab_login, tab_cadastro = st.tabs(
             ["🔑 Acessar Minha Conta", "📝 Não tenho cadastro (Cadastrar-me)"]
         )
 
-        # ----------------------------------------------------------------------
-        # ABA 1: FORMULÁRIO DE LOGIN
-        # ----------------------------------------------------------------------
         with tab_login:
             st.subheader("Autenticação de Colaborador")
             st.caption("Informe seu e-mail e senha cadastrados para acessar.")
@@ -309,30 +275,28 @@ if menu == "🏠 Início":
                 )
 
                 if btn_entrar:
-                    # 🟢 Busca e valida o usuário direto do banco de dados SQLite
                     colaborador = st.session_state.db.buscar_pessoa_por_login(
-                        login_email, login_senha
+                        str(login_email or ""), str(login_senha or "")
                     )
 
                     if colaborador:
                         st.session_state.usuario_logado = colaborador
                         st.balloons()
                         st.success(
-                            f"✅ Bem-vindo(a), **{colaborador['nome']}**!"
+                            f"✅ Bem-vindo(a), **{str(colaborador.get('nome') or '')}**!"
                         )
                         st.rerun()
                     else:
                         st.error(
-                            "❌ E-mail ou senha incorretos. Verifique suas credenciais ou faça o cadastro."
+                            "❌ E-mail ou senha incorretos. Verifique suas"
+                            " credenciais ou faça o cadastro."
                         )
 
-        # ----------------------------------------------------------------------
-        # ABA 2: FORMULÁRIO DE CADASTRO RÁPIDO (Salvando direto no SQLite)
-        # ----------------------------------------------------------------------
         with tab_cadastro:
             st.subheader("Criar Novo Cadastro de Colaborador")
             st.caption(
-                "Preencha os dados abaixo para salvar no banco de dados e liberar o acesso."
+                "Preencha os dados abaixo para salvar no banco de dados e"
+                " liberar o acesso."
             )
 
             with st.form("form_cadastro_rapido"):
@@ -352,7 +316,13 @@ if menu == "🏠 Início":
                     )
                     novos_projetos = st.multiselect(
                         "Projetos de Atuação",
-                        ["MCTI", "MEC", "COPASA", "Globalweb", "Start Caoa"],
+                        [
+                            "MCTI",
+                            "MEC",
+                            "COPASA",
+                            "Globalweb",
+                            "Start Caoa",
+                        ],
                         default=["MCTI"],
                     )
                     nova_senha = st.text_input(
@@ -383,25 +353,24 @@ if menu == "🏠 Início":
                         }
 
                         try:
-                            # 🟢 Salva permanentemente no banco SQLite
                             st.session_state.db.salvar_pessoa(nova_pessoa_dict)
-
-                            # Loga automaticamente o usuário recém-cadastrado
                             st.session_state.usuario_logado = nova_pessoa_dict
-
                             st.balloons()
                             st.success(
-                                f"🎉 Cadastro de **{novo_nome}** salvo no banco com sucesso!"
+                                f"🎉 Cadastro de **{novo_nome}** salvo no banco"
+                                " com sucesso!"
                             )
                             st.rerun()
 
                         except Exception as e:
                             st.error(
-                                f"⚠️ Erro ao salvar cadastro (este e-mail pode já estar cadastrado): {e}"
+                                f"⚠️ Erro ao salvar cadastro (este e-mail pode"
+                                f" já estar cadastrado): {e}"
                             )
                     else:
                         st.warning(
-                            "⚠️ Preencha Nome, E-mail, Senha e escolha pelo menos 1 Projeto."
+                            "⚠️ Preencha Nome, E-mail, Senha e escolha pelo"
+                            " menos 1 Projeto."
                         )
 
         st.markdown("---")
@@ -416,14 +385,10 @@ elif menu == "📋 Listar Pessoas":
         "Visualização centralizada da equipe e edição de dados cadastrais."
     )
 
-    # 1. Busca colaboradores do banco de dados
-    pessoas_banco = st.session_state.db.listar_pessoas()
-
-    # Identifica o nível de acesso do usuário logado
+    pessoas_banco: List[Dict[str, Any]] = st.session_state.db.listar_pessoas()
     nivel_acesso = obter_nivel_permissao()
 
     if pessoas_banco:
-        # Exibe a tabela principal de visualização para Supervisores e Gestores/Admin
         st.dataframe(
             pessoas_banco,
             use_container_width=True,
@@ -435,21 +400,15 @@ elif menu == "📋 Listar Pessoas":
                 "telefone": "Telefone",
                 "data_admissao": "Admissão",
                 "projeto": "Contratos Atribuídos",
-                "senha": None,  # Oculta a senha
+                "senha": None,
             },
             hide_index=True,
         )
 
         st.markdown("---")
-
-        # ----------------------------------------------------------------------
-        # ✏️ SEÇÃO DE EDIÇÃO (LIBERADA APENAS PARA ADMIN / GESTOR / DEV)
-        # ----------------------------------------------------------------------
         st.subheader("✏️ Alterar Cadastro de Colaborador")
 
-
         if nivel_acesso == "admin":
-            # Lista padronizada de cargos para manter a coerência do RBAC
             lista_cargos_padrao = [
                 "Gestor de TI",
                 "Coordenador de Operações",
@@ -461,9 +420,8 @@ elif menu == "📋 Listar Pessoas":
                 "Técnico de Campo",
             ]
 
-            # Dicionário formatado de colaboradores
             opcoes_pessoas = {
-                f"#{p['id']} - {p['nome']} ({p['cargo']})": p
+                f"#{p.get('id')} - {p.get('nome')} ({p.get('cargo')})": p
                 for p in pessoas_banco
             }
 
@@ -475,24 +433,20 @@ elif menu == "📋 Listar Pessoas":
             if pessoa_selecionada_chave:
                 pessoa_dados = opcoes_pessoas[pessoa_selecionada_chave]
 
-                # Identifica o cargo atual para pré-selecionar no dropdown
-                cargo_atual = pessoa_dados.get("cargo", "")
+                cargo_atual = str(pessoa_dados.get("cargo") or "")
                 index_cargo = 0
                 for idx, c in enumerate(lista_cargos_padrao):
                     if c in cargo_atual:
                         index_cargo = idx
                         break
 
-                # --------------------------------------------------------------
-                # 📝 FORMULÁRIO 1: ALTERAÇÃO DE DADOS CADASTRAIS
-                # --------------------------------------------------------------
                 with st.form("form_editar_pessoa"):
                     col_e1, col_e2 = st.columns(2)
 
                     with col_e1:
                         edit_nome = st.text_input(
                             "Nome Completo",
-                            value=str(pessoa_dados.get("nome", "")),
+                            value=str(pessoa_dados.get("nome") or ""),
                         )
                         edit_cargo_sel = st.selectbox(
                             "Cargo / Função Corporativa",
@@ -505,23 +459,23 @@ elif menu == "📋 Listar Pessoas":
                         )
                         edit_email = st.text_input(
                             "E-mail Corporativo",
-                            value=str(pessoa_dados.get("email", "")),
+                            value=str(pessoa_dados.get("email") or ""),
                         )
 
                     with col_e2:
                         edit_telefone = st.text_input(
                             "Telefone",
-                            value=str(pessoa_dados.get("telefone", "")),
+                            value=str(pessoa_dados.get("telefone") or ""),
                         )
                         edit_admissao = st.text_input(
                             "Data Admissão",
-                            value=str(pessoa_dados.get("data_admissao", "")),
+                            value=str(pessoa_dados.get("data_admissao") or ""),
                         )
 
                         projetos_existentes = [
                             p.strip()
                             for p in str(
-                                pessoa_dados.get("projeto", "MCTI")
+                                pessoa_dados.get("projeto") or "MCTI"
                             ).split(",")
                             if p.strip()
                         ]
@@ -562,17 +516,16 @@ elif menu == "📋 Listar Pessoas":
                             pessoa_dados["id"], dados_atualizados
                         )
                         st.success(
-                            f"✅ Cadastro de **{edit_nome}** atualizado com sucesso!"
+                            f"✅ Cadastro de **{edit_nome}** atualizado com"
+                            " sucesso!"
                         )
                         st.rerun()
 
-                # --------------------------------------------------------------
-                # 🔑 FORMULÁRIO 2: RESET DE SENHA (INDEPENDENTE E SEPARADO)
-                # --------------------------------------------------------------
                 st.markdown("---")
                 st.subheader("🔑 Redefinição de Senha Corporativa")
                 st.caption(
-                    "Funcionalidade restrita a Gestores e Devs para suporte e reset de credenciais."
+                    "Funcionalidade restrita a Gestores e Devs para suporte e"
+                    " reset de credenciais."
                 )
 
                 with st.form("form_alterar_senha_admin"):
@@ -598,38 +551,49 @@ elif menu == "📋 Listar Pessoas":
                                 pessoa_dados["id"], nova_senha_input
                             )
                             st.success(
-                                f"✅ Senha do colaborador **{pessoa_dados['nome']}** redefinida no banco!"
+                                f"✅ Senha do colaborador"
+                                f" **{str(pessoa_dados.get('nome') or '')}** redefinida no"
+                                " banco!"
                             )
                             st.balloons()
                         else:
                             st.warning(
-                                "⚠️ Digite uma nova senha válida antes de salvar."
+                                "⚠️ Digite uma nova senha válida antes de"
+                                " salvar."
                             )
 
         elif nivel_acesso == "supervisor":
             st.info(
-                "🔒 **Acesso restrito para edição:** Supervisores podem visualizar a lista de colaboradores, mas alterações cadastrais são permitidas apenas para **Gestores e Administradores**."
+                "🔒 **Acesso restrito para edição:** Supervisores podem"
+                " visualizar a lista de colaboradores, mas alterações"
+                " cadastrais são permitidas apenas para **Gestores e"
+                " Administradores**."
             )
 
         else:
             st.warning(
-                "⚠️ Operadores não possuem permissão para alterar cadastros de equipe."
+                "⚠️ Operadores não possuem permissão para alterar cadastros de"
+                " equipe."
             )
 
     else:
         st.info("Nenhum colaborador encontrado na base.")
+
 # ------------------------------------------------------------------------------
-# TELA 2: CADASTRO DE PESSOAS (Com seleção de múltiplos projetos)
+# TELA 2: CADASTRO DE PESSOAS
 # ------------------------------------------------------------------------------
 elif menu == "👤 Cadastrar Pessoa":
     st.title("Cadastrar Novo Colaborador")
-    st.caption("Preencha as informações abaixo para adicionar a pessoa à equipe.")
+    st.caption(
+        "Preencha as informações abaixo para adicionar a pessoa à equipe."
+    )
 
-    # 🔒 Validação de Permissão
     nivel_atual = obter_nivel_permissao()
     if nivel_atual != "admin":
         st.warning(
-            "⚠️ **Acesso Restrito:** Apenas **Gestores, Administradores e Devs** podem cadastrar novos colaboradores.")
+            "⚠️ **Acesso Restrito:** Apenas **Gestores, Administradores e"
+            " Devs** podem cadastrar novos colaboradores."
+        )
         st.stop()
 
     with st.form("form_cadastrar_pessoa_menu"):
@@ -638,7 +602,6 @@ elif menu == "👤 Cadastrar Pessoa":
         with col1:
             nome = st.text_input("Nome Completo")
 
-            # Lista padronizada para garantir a regra do RBAC
             cargo_selecionado = st.selectbox(
                 "Cargo / Função Corporativa",
                 [
@@ -649,11 +612,18 @@ elif menu == "👤 Cadastrar Pessoa":
                     "Líder Técnico",
                     "Analista de Suporte",
                     "Operador de Call Center",
-                    "Técnico de Campo"
-                ]
+                    "Técnico de Campo",
+                ],
             )
-            cargo_complemento = st.text_input("Especificação da Função (Opcional)", placeholder="Ex: Nível 2 / Noite")
-            cargo_final = f"{cargo_selecionado} - {cargo_complemento}" if cargo_complemento else cargo_selecionado
+            cargo_complemento = st.text_input(
+                "Especificação da Função (Opcional)",
+                placeholder="Ex: Nível 2 / Noite",
+            )
+            cargo_final = (
+                f"{cargo_selecionado} - {cargo_complemento}"
+                if cargo_complemento
+                else cargo_selecionado
+            )
 
             email = st.text_input("E-mail Corporativo")
             telefone = st.text_input("Telefone / Celular")
@@ -663,11 +633,13 @@ elif menu == "👤 Cadastrar Pessoa":
             projetos = st.multiselect(
                 "Projetos / Contratos de Atuação",
                 ["MCTI", "MEC", "COPASA", "Globalweb", "Start Caoa"],
-                default=["MCTI"]
+                default=["MCTI"],
             )
             senha = st.text_input("Senha de acesso", type="password")
 
-        btn_cadastrar = st.form_submit_button("✨ Confirmar e Salvar Cadastro")
+        btn_cadastrar = st.form_submit_button(
+            "✨ Confirmar e Salvar Cadastro"
+        )
 
         if btn_cadastrar:
             if nome and email and senha and projetos:
@@ -680,19 +652,25 @@ elif menu == "👤 Cadastrar Pessoa":
                     "telefone": telefone,
                     "data_admissao": data_admissao,
                     "projeto": string_proj,
-                    "senha": senha
+                    "senha": senha,
                 }
 
                 try:
                     st.session_state.db.salvar_pessoa(nova_pessoa_dict)
-                    st.success(f"✅ Colaborador **{nome}** (`{cargo_final}`) cadastrado no banco com sucesso!")
+                    st.success(
+                        f"✅ Colaborador **{nome}** (`{cargo_final}`)"
+                        " cadastrado no banco com sucesso!"
+                    )
                 except Exception as e:
                     st.error(f"⚠️ Erro ao cadastrar colaborador: {e}")
             else:
-                st.warning("⚠️ Preencha Nome, E-mail, Senha e escolha pelo menos 1 Projeto.")
+                st.warning(
+                    "⚠️ Preencha Nome, E-mail, Senha e escolha pelo menos 1"
+                    " Projeto."
+                )
 
 # ------------------------------------------------------------------------------
-# TELA 3: ABERTURA DE CHAMADO (Reativa ao usuário e calculando SLA)
+# TELA 3: ABERTURA DE CHAMADO
 # ------------------------------------------------------------------------------
 elif menu == "🎫 Abertura de Chamado":
     st.title("🎫 Abertura Rápida e Inteligente de Chamado")
@@ -701,7 +679,6 @@ elif menu == "🎫 Abertura de Chamado":
         " antes do registro."
     )
 
-    # 1. IDENTIFICAÇÃO DO PROJETO E SOLICITANTE
     pessoas_banco = (
         st.session_state.db.listar_pessoas()
         if hasattr(st.session_state.db, "listar_pessoas")
@@ -718,7 +695,7 @@ elif menu == "🎫 Abertura de Chamado":
     with col_p2:
         opcoes_solic = (
             [
-                f"{p['nome']} ({p.get('cargo', 'Cliente')})"
+                f"{p.get('nome')} ({p.get('cargo', 'Cliente')})"
                 for p in pessoas_banco
             ]
             if pessoas_banco
@@ -732,49 +709,51 @@ elif menu == "🎫 Abertura de Chamado":
             key="sb_solic_clean",
         )
 
-        if "➕ Digitar" in solic_sel:
+        if "➕ Digitar" in str(solic_sel):
             solicitante_final = st.text_input(
                 "Nome do Solicitante",
                 placeholder="Digite o nome completo...",
                 key="txt_solic_manual",
             )
         else:
-            solicitante_final = solic_sel.split(" (")[0]
+            solicitante_final = str(solic_sel).split(" (")[0]
 
     st.markdown("---")
 
-    # 2. FUNÇÃO AUXILIAR DE PROCESSAMENTO DA IA
+
     def processar_relato_ia():
-        relato = st.session_state.get("input_relato_ia", "")
+        relato = str(st.session_state.get("input_relato_ia") or "")
         if relato.strip():
             sugestao = agent_ai.classificar_chamado(
                 relato,
                 gerenciador_port.contratos,
                 gerenciador_port.categorias_tecnicas,
             )
-            cat = sugestao.get("categoria", "Outros")
-            subcat = sugestao.get("subcategoria", "Geral")
+            cat_sug = sugestao.get("categoria", "Outros")
+            subcat_sug = sugestao.get("subcategoria", "Geral")
 
-            st.session_state["sugestao_cat"] = cat
-            st.session_state["sugestao_subcat"] = subcat
+            st.session_state["sugestao_cat"] = cat_sug
+            st.session_state["sugestao_subcat"] = subcat_sug
 
-            # Trata o texto para o Resumo Curto
             relato_limpo = (
-                relato.replace("infotma", "informa")
+                relato.replace("internnet", "internet")
+                .replace("infotma", "informa")
                 .replace("solciita", "solicita")
-                .replace("nao consegue", "não consegue")
+                .replace("equipamentno", "equipamento")
                 .strip()
             )
             st.session_state["txt_resumo_conf"] = (
-                f"Solicitação de {subcat} - {relato_limpo[:60]}"
+                f"Solicitação de {subcat_sug} - {relato_limpo[:60]}"
             )
 
-            # Gera a descrição técnica limpa e padronizada
             st.session_state["ta_desc_conf"] = agent_ai.polir_descricao(
-                texto_bruto=relato, categoria=cat, subcategoria=subcat
+                relato,
+                str(cat_sug),
+                str(subcat_sug),
+                str(solicitante_final),
             )
 
-    # Entrada de Texto Livre
+
     st.text_area(
         "📝 O que o cliente/servidor relatou? (Texto Livre)",
         placeholder="Ex: Colaboradora informa que não consegue acessar a pasta de rede COPASA...",
@@ -783,15 +762,14 @@ elif menu == "🎫 Abertura de Chamado":
         on_change=processar_relato_ia,
     )
 
-    # ⚡ BOTÃO PRINCIPAL DA IA LOGO ABAIXO DO TEXTO LIVRE
     col_b1, col_b2 = st.columns([1, 2])
     with col_b1:
         if st.button(
-            "✨ Analisar e Processar com IA",
-            type="primary",
-            use_container_width=True,
+                "✨ Analisar e Processar com IA",
+                type="primary",
+                use_container_width=True,
         ):
-            if st.session_state.get("input_relato_ia", "").strip():
+            if str(st.session_state.get("input_relato_ia") or "").strip():
                 processar_relato_ia()
                 st.success("✨ IA processou o relato e ajustou o chamado!")
                 st.rerun()
@@ -809,22 +787,21 @@ elif menu == "🎫 Abertura de Chamado":
     st.markdown("---")
 
     if (
-        st.session_state.get("input_relato_ia", "").strip()
-        and "sugestao_cat" not in st.session_state
+            str(st.session_state.get("input_relato_ia") or "").strip()
+            and "sugestao_cat" not in st.session_state
     ):
         processar_relato_ia()
 
-    # 3. SELEÇÃO DE CATEGORIAS (ALINHAMENTO DA IA)
     categorias = list(gerenciador_port.categorias_tecnicas.keys())
-    cat_sug = st.session_state.get("sugestao_cat")
+    cat_sug_val = str(st.session_state.get("sugestao_cat") or "")
 
     idx_cat = 0
-    if cat_sug:
+    if cat_sug_val:
         for i, c in enumerate(categorias):
             if (
-                cat_sug.lower() in c.lower()
-                or c.lower() in cat_sug.lower()
-                or ("acesso" in cat_sug.lower() and "acesso" in c.lower())
+                    cat_sug_val.lower() in c.lower()
+                    or c.lower() in cat_sug_val.lower()
+                    or ("acesso" in cat_sug_val.lower() and "acesso" in c.lower())
             ):
                 idx_cat = i
                 break
@@ -837,16 +814,16 @@ elif menu == "🎫 Abertura de Chamado":
         )
 
     subcategorias = gerenciador_port.categorias_tecnicas.get(
-        cat_escolhida, ["Geral"]
+        str(cat_escolhida), ["Geral"]
     )
-    subcat_sug = st.session_state.get("sugestao_subcat")
+    subcat_sug_val = str(st.session_state.get("sugestao_subcat") or "")
 
     idx_subcat = 0
-    if subcat_sug:
+    if subcat_sug_val:
         for i, sc in enumerate(subcategorias):
             if (
-                subcat_sug.lower() in sc.lower()
-                or sc.lower() in subcat_sug.lower()
+                    subcat_sug_val.lower() in sc.lower()
+                    or sc.lower() in subcat_sug_val.lower()
             ):
                 idx_subcat = i
                 break
@@ -867,7 +844,7 @@ elif menu == "🎫 Abertura de Chamado":
             key="slider_impacto_conf",
         )
         regras_sla = {"Alto": "02 horas", "Médio": "08 horas", "Baixo": "24 horas"}
-        prazo_sla = regras_sla.get(impacto_escolhido, "24 horas")
+        prazo_sla = regras_sla.get(str(impacto_escolhido), "24 horas")
 
     st.markdown("---")
 
@@ -888,9 +865,8 @@ elif menu == "🎫 Abertura de Chamado":
         key="ta_desc_conf",
     )
 
-    # 4. CAMPOS COMPLEMENTARES ORGANIZADOS
     with st.expander(
-        "🛠️ Informações Complementares (Aprovador, Patrimônio, IP e Sala)"
+            "🛠️ Informações Complementares (Aprovador, Patrimônio, IP e Sala)"
     ):
         col_c1, col_c2 = st.columns(2)
         with col_c1:
@@ -916,7 +892,6 @@ elif menu == "🎫 Abertura de Chamado":
 
     st.markdown("---")
 
-    # 5. PRÉ-VISUALIZAÇÃO DO TICKET
     st.subheader("👁️ Pré-visualização do Ticket de Atendimento")
 
     proximo_id = (
@@ -944,10 +919,17 @@ elif menu == "🎫 Abertura de Chamado":
             st.markdown(
                 f"**Aprovador:** {superior_imediato if superior_imediato else 'N/A'}"
             )
-            st.markdown(f"**Patrimônio/EST:** {patrimonio if patrimonio else 'N/A'}")
             st.markdown(
-                f"**Operador:** `{st.session_state.usuario_logado.get('nome', 'Operador') if st.session_state.usuario_logado else 'Operador'}`"
+                f"**Patrimônio/EST:** {patrimonio if patrimonio else 'N/A'}"
             )
+            operador_nome = "Operador"
+            if (
+                    st.session_state.usuario_logado
+                    and isinstance(st.session_state.usuario_logado, dict)
+            ):
+                operador_nome = str(st.session_state.usuario_logado.get("nome") or "Operador")
+
+            st.markdown(f"**Operador:** `{operador_nome}`")
 
         st.markdown("---")
         st.markdown(
@@ -963,13 +945,23 @@ elif menu == "🎫 Abertura de Chamado":
 
     st.write("")
 
-    # 6. REGISTRO NO BANCO SQLITE
     if st.button(
-        "🚀 Confirmar e Registrar Chamado no Banco",
-        type="primary",
-        use_container_width=True,
+            "🚀 Confirmar e Registrar Chamado no Banco",
+            type="primary",
+            use_container_width=True,
     ):
-        if solicitante_final and resumo_final.strip() and descricao_final.strip():
+        if (
+                solicitante_final
+                and str(resumo_final).strip()
+                and str(descricao_final).strip()
+        ):
+            operador_reg = "Operador"
+            if (
+                    st.session_state.usuario_logado
+                    and isinstance(st.session_state.usuario_logado, dict)
+            ):
+                operador_reg = str(st.session_state.usuario_logado.get("nome") or "Operador")
+
             novo_chamado = {
                 "protocolo": protocolo_previsto,
                 "solicitante": solicitante_final,
@@ -984,11 +976,7 @@ elif menu == "🎫 Abertura de Chamado":
                 "descricao": descricao_final,
                 "impacto": impacto_escolhido,
                 "prazo_sla": prazo_sla,
-                "operador": (
-                    st.session_state.usuario_logado.get("nome", "Operador")
-                    if st.session_state.usuario_logado
-                    else "Operador"
-                ),
+                "operador": operador_reg,
                 "status": "Aberto",
             }
 
@@ -1005,12 +993,89 @@ elif menu == "🎫 Abertura de Chamado":
             )
 
 # ------------------------------------------------------------------------------
-# TELA 4: PROJETOS / PORTFÓLIOS
+# TELA 4: RELATÓRIOS INTELIGENTES COM AGENTE IA
+# ------------------------------------------------------------------------------
+elif menu == "📊 Relatórios Inteligentes":
+    st.title("🤖 Relatórios Inteligentes & Assistente de Gestão")
+    st.caption("Digite o que deseja analisar ou selecione um histórico.")
+
+    # Inicializa histórico no session_state
+    if "historico_prompts" not in st.session_state:
+        st.session_state.historico_prompts = []
+
+    # Garante que o input_prompt_relatorio exista no session_state
+    if "input_prompt_relatorio" not in st.session_state:
+        st.session_state.input_prompt_relatorio = ""
+
+    # Área de histórico
+    if st.session_state.historico_prompts:
+        st.caption("🕒 **Histórico de buscas recentes:**")
+        cols_hist = st.columns(len(st.session_state.historico_prompts))
+        for i, hist in enumerate(st.session_state.historico_prompts):
+            if cols_hist[i].button(f"♻️ {hist}", key=f"btn_hist_{i}"):
+                st.session_state.input_prompt_relatorio = hist
+                st.rerun()
+
+    with st.form("form_relatorio_ia"):
+        prompt_gestor = st.text_input(
+            "🔎 O que você deseja ver no relatório?",
+            placeholder="Ex: Quero ver todos os chamados críticos do MCTI...",
+            key="input_prompt_relatorio"
+        )
+        btn_executar_ia = st.form_submit_button("🔍 Executar Análise Inteligente", type="primary",
+                                                use_container_width=True)
+
+    # Lógica do Histórico (salva apenas se houver busca)
+    if btn_executar_ia and str(prompt_gestor or "").strip():
+        if prompt_gestor not in st.session_state.historico_prompts:
+            st.session_state.historico_prompts.insert(0, prompt_gestor)
+            st.session_state.historico_prompts = st.session_state.historico_prompts[:5]
+
+    chamados_todos: List[Dict[str, Any]] = st.session_state.db.listar_chamados()
+
+    if chamados_todos:
+        # Se clicar no botão ou se já houver um texto (para manter o resultado ao navegar)
+        if btn_executar_ia or st.session_state.input_prompt_relatorio:
+            query = str(prompt_gestor or "")
+            dados_filtrados = GerenciadorRelatorios.filtrar_dados_por_ia(query, chamados_todos)
+
+            st.markdown("---")
+
+            if not dados_filtrados:
+                st.error(
+                    f"⚠️ Nenhum chamado encontrado para: **'{query}'**. Tente ajustar os termos ou selecionar outro projeto.")
+            else:
+                # Painel de Insights
+                insights = GerenciadorRelatorios.obter_insights_executivos(dados_filtrados)
+                with st.container(border=True):
+                    col_in1, col_in2, col_in3, col_in4 = st.columns(4)
+                    col_in1.metric("📊 Total Filtrado", insights["total"])
+                    col_in2.metric("⚠️ Críticos/Altos", insights["criticos"])
+                    col_in3.metric("📌 Status Predominante", insights["status_predominante"])
+                    col_in4.metric("📁 Projeto Predominante", insights["projeto_frequente"])
+
+                df_relatorio = pd.DataFrame(dados_filtrados)
+
+                # Gráfico
+                if "status" in df_relatorio.columns:
+                    st.bar_chart(df_relatorio["status"].value_counts())
+
+                # Tabela
+                st.dataframe(df_relatorio, use_container_width=True, hide_index=True)
+
+                # Exportação
+                st.markdown("### 📥 Exportar")
+                excel_bytes = GerenciadorRelatorios.converter_para_excel(dados_filtrados)
+                st.download_button("📊 Baixar Excel (.xlsx)", excel_bytes, "relatorio.xlsx", use_container_width=True)
+
+# ------------------------------------------------------------------------------
+# TELA 5: PROJETOS / PORTFÓLIOS
 # ------------------------------------------------------------------------------
 elif menu == "📁 Projetos / Portfólios":
     st.title("📂 Matriz de Portfólios & Contratos")
     st.caption(
-        "Guia de Referência rápida do escopo de atendimento para colaboradores e gestores."
+        "Guia de Referência rápida do escopo de atendimento para colaboradores e"
+        " gestores."
     )
 
     col_m1, col_m2, col_m3 = st.columns(3)
@@ -1039,7 +1104,8 @@ elif menu == "📁 Projetos / Portfólios":
     with tab_esqueleto:
         st.subheader("Árvore de Categorias e Subcategorias")
         st.write(
-            "Expanda as categorias para consultar o escopo detalhado de cada área de suporte:"
+            "Expanda as categorias para consultar o escopo detalhado de cada"
+            " área de suporte:"
         )
 
         for cat, subcats in gerenciador_port.categorias_tecnicas.items():
@@ -1048,154 +1114,451 @@ elif menu == "📁 Projetos / Portfólios":
                     st.write(f"- {subcat}")
 
 # ------------------------------------------------------------------------------
-# TELA 5: PAINEL DE HISTÓRICO DE CHAMADOS (Com suporte aos novos campos)
+# TELA 6: PAINEL DE HISTÓRICO DE CHAMADOS & FILTROS AVANÇADOS
 # ------------------------------------------------------------------------------
 elif menu == "📊 Histórico de Chamados":
-    st.title("📊 Painel de Chamados Registrados")
-    st.write(
-        "Acompanhe o histórico de todas as solicitações salvas no banco de dados."
+
+    st.markdown(
+        """
+        <style>
+        .stApp {
+            background-color: #0f172a !important;
+            color: #f8fafc;
+        }
+        div[data-testid="stMetricValue"] {
+            color: #38bdf8 !important;
+        }
+        div[data-testid="stForm"] {
+            background-color: #1e293b !important;
+            border-radius: 10px;
+            border: 1px solid #334155 !important;
+        }
+        .filter-card {
+            background-color: #1e293b;
+            padding: 18px;
+            border-radius: 12px;
+            border: 1px solid #334155;
+            margin-bottom: 20px;
+        }
+        </style>
+        """,
+        unsafe_allow_html=True,
     )
 
-    chamados_salvos = st.session_state.db.listar_chamados()
+    st.title("📊 Painel de Controle e Histórico de Chamados")
+    st.caption(
+        "Filtros por período, buscas avançadas, gerenciamento de status e"
+        " impressão de OS."
+    )
 
-    if chamados_salvos:
-        # Métricas do Topo
-        total_chamados = len(chamados_salvos)
-        chamados_altos = len(
-            [c for c in chamados_salvos if c.get("impacto") == "Alto"]
-        )
+    chamados_todos: List[Dict[str, Any]] = st.session_state.db.listar_chamados()
+    usr_atual: Any = st.session_state.get("usuario_logado") or {}
+    nome_usuario_logado: str = (
+        str(usr_atual.get("nome") or "Operador")
+        if isinstance(usr_atual, dict)
+        else "Operador"
+    )
+    nivel_acesso: str = str(obter_nivel_permissao())
 
-        col1, col2, col3 = st.columns(3)
-        col1.metric("Total de Chamados Abertos", total_chamados)
-        col2.metric("Chamados de Alto Impacto", chamados_altos)
-        col3.metric("Status do Banco", "Online 🟢")
+    if chamados_todos:
+        with st.form("form_filtros_chamados"):
+            st.markdown("### 🔍 Filtros de Pesquisa")
+            col_f1, col_f2, col_f3 = st.columns([2, 2, 1.5])
 
-        st.markdown("---")
-        st.subheader("📋 Tabela de Registros")
-
-        # Tabela formatada exibindo os novos campos de Protocolo e SLA
-        st.dataframe(
-            chamados_salvos,
-            use_container_width=True,
-            column_config={
-                "id": st.column_config.NumberColumn("ID", format="#%d"),
-                "protocolo": "Protocolo",
-                "data_abertura": st.column_config.DatetimeColumn(
-                    "Abertura", format="DD/MM/YYYY HH:mm"
-                ),
-                "solicitante": "Solicitante",
-                "projeto": "Contrato",
-                "categoria": "Categoria",
-                "subcategoria": "Subcategoria",
-                "resumo": "Resumo",
-                "impacto": "Impacto",
-                "prazo_sla": "SLA Previsto",
-                "descricao": None,
-                "patrimonio": None,
-                "andar_sala": None,
-                "ip": None,
-            },
-            hide_index=True,
-        )
-
-        # ----------------------------------------------------------------------
-        # 🖨️ VISUALIZAÇÃO E IMPRESSÃO DE ORDEM DE SERVIÇO
-        # ----------------------------------------------------------------------
-        st.markdown("---")
-        st.subheader("🖨️ Visualizar e Imprimir Chamado")
-
-        # 🟢 Forma limpa e sem erro de aspas/contra-barra:
-        opcoes_chamados = ["Selecione um chamado..."] + [
-            f"{c.get('protocolo') or 'ID #' + str(c['id'])} - {c['projeto']} ({c['resumo']})"
-            for c in chamados_salvos
-        ]
-
-        chamado_selecionado = st.selectbox(
-            "Selecione para gerar a Ordem de Serviço:", opcoes_chamados
-        )
-
-        if chamado_selecionado != "Selecione um chamado...":
-            # Busca o registro pelo índice selecionado na lista
-            idx_selecionado = opcoes_chamados.index(chamado_selecionado) - 1
-            ticket = chamados_salvos[idx_selecionado]
-
-            if ticket:
-                # CSS para ocultar elementos do Streamlit na hora do Ctrl+P
-                st.markdown(
-                    """
-                    <style>
-                    @media print {
-                        section[data-testid="stSidebar"] {display: none !important;}
-                        header[data-testid="stHeader"] {display: none !important;}
-                        .stSelectbox {display: none !important;}
-                        button {display: none !important;}
-                        .main .block-container {max-width: 100% !important; padding: 1rem !important;}
-                    }
-                    </style>
-                """,
-                    unsafe_allow_html=True,
+            with col_f1:
+                hoje = date.today()
+                data_inicio = date(hoje.year, 1, 1)
+                periodo_raw = st.date_input(
+                    "📅 Período de Abertura (Início e Fim):",
+                    value=(data_inicio, hoje),
+                    key="filtro_datas",
                 )
 
-                # Ordem de Serviço Formatada
-                # Ordem de Serviço Formatada
-                with st.container(border=True):
-                    col_logo, col_titulo = st.columns([1, 4])
-
-                    # 🟢 Pega o protocolo ou gera a tag de ID limpa
-                    protocolo_exibicao = ticket.get('protocolo') or f"ID #{ticket['id']}"
-
-                    with col_logo:
-                        st.image("logo.png", width=100)
-                    with col_titulo:
-                        st.markdown(f"## 🎫 Ordem de Serviço - {protocolo_exibicao}")
-                        st.caption(
-                            f"**Data de Abertura:** {ticket['data_abertura']} | **SLA Previsto:** {ticket.get('prazo_sla', '24 horas')}"
-                        )
-
-                    st.markdown("---")
-
-                    c1, c2, c3, c4 = st.columns(4)
-                    c1.markdown(f"**👤 Solicitante:**\n{ticket['solicitante']}")
-                    c2.markdown(f"**🏢 Contrato:**\n{ticket['projeto']}")
-                    c3.markdown(f"**📁 Categoria:**\n{ticket['categoria']}")
-                    c4.markdown(f"**⚠️ Impacto:**\n{ticket['impacto']}")
-
-                    if (
-                        ticket["patrimonio"]
-                        or ticket["andar_sala"]
-                        or ticket["ip"]
-                    ):
-                        st.markdown("<br>", unsafe_allow_html=True)
-                        c_infra1, c_infra2, c_infra3 = st.columns(3)
-                        c_infra1.markdown(
-                            f"**🖥️ Patrimônio:** {ticket['patrimonio'] or 'N/A'}"
-                        )
-                        c_infra2.markdown(
-                            f"**📍 Localização:** {ticket['andar_sala'] or 'N/A'}"
-                        )
-                        c_infra3.markdown(
-                            f"**🌐 Endereço IP:** {ticket['ip'] or 'N/A'}"
-                        )
-
-                    st.markdown("---")
-
-                    st.markdown("### 📝 Descrição Técnica e Diagnóstico")
-                    st.info(f"**Resumo:** {ticket['resumo']}")
-                    st.markdown(ticket["descricao"])
-
-                    st.markdown("<br><br>", unsafe_allow_html=True)
-                    col_ass1, col_ass2 = st.columns(2)
-                    col_ass1.markdown(
-                        "<div style='text-align: center;'>_______________________________________<br><b>Assinatura do Solicitante</b></div>",
-                        unsafe_allow_html=True,
+            with col_f2:
+                termo_busca: str = str(
+                    st.text_input(
+                        "🔎 Buscar por Solicitante, E-mail, Projeto ou Operador:",
+                        placeholder="Digite o nome, projeto ou operador...",
+                        key="txt_busca_geral",
                     )
-                    col_ass2.markdown(
-                        "<div style='text-align: center;'>_______________________________________<br><b>Assinatura do Técnico (N1/N2)</b></div>",
-                        unsafe_allow_html=True,
-                    )
-
-                st.success(
-                    "💡 **Dica:** Pressione `Ctrl + P` para salvar como PDF ou imprimir."
+                    or ""
                 )
+
+            with col_f3:
+                status_filtro: str = str(
+                    st.selectbox(
+                        "📌 Filtrar por Status:",
+                        options=[
+                            "Todos",
+                            "Aberto",
+                            "Em Andamento",
+                            "Suspenso",
+                            "Aguardando Autorização",
+                            "Fechado / Concluído",
+                        ],
+                        key="sb_status_filtro",
+                    )
+                    or "Todos"
+                )
+
+            btn_buscar = st.form_submit_button(
+                "🔍 Buscar / Aplicar Filtros", type="primary", use_container_width=True
+            )
+
+        d_inicio: Optional[date] = None
+        d_fim: Optional[date] = None
+
+        if isinstance(periodo_raw, (tuple, list)):
+            if len(periodo_raw) > 0 and isinstance(periodo_raw[0], date):
+                d_inicio = periodo_raw[0]
+            if len(periodo_raw) > 1 and isinstance(periodo_raw[1], date):
+                d_fim = periodo_raw[1]
+            elif d_inicio is not None:
+                d_fim = d_inicio
+        elif isinstance(periodo_raw, date):
+            d_inicio = periodo_raw
+            d_fim = periodo_raw
+
+        chamados_filtrados: List[Dict[str, Any]] = []
+
+        for c in chamados_todos:
+            data_valida = True
+            raw_data = str(c.get("data_abertura") or "").split(" ")[0]
+            if raw_data and d_inicio is not None and d_fim is not None:
+                try:
+                    dt_obj = datetime.strptime(raw_data, "%d/%m/%Y").date()
+                    if not (d_inicio <= dt_obj <= d_fim):
+                        data_valida = False
+                except ValueError:
+                    pass
+
+            texto_valido = True
+            termo_limpo = termo_busca.strip().lower()
+            if termo_limpo:
+                campos = [
+                    str(c.get("solicitante") or "").lower(),
+                    str(c.get("email") or "").lower(),
+                    str(c.get("projeto") or "").lower(),
+                    str(c.get("operador") or "").lower(),
+                    str(c.get("protocolo") or "").lower(),
+                ]
+                if not any(termo_limpo in campo for campo in campos):
+                    texto_valido = False
+
+            status_valido = True
+            if status_filtro != "Todos":
+                status_chamado = str(c.get("status") or "Aberto")
+                if status_chamado.lower() != status_filtro.lower():
+                    status_valido = False
+
+            if data_valida and texto_valido and status_valido:
+                chamados_filtrados.append(c)
+
+        st.markdown("---")
+
+        tab_listagem, tab_gestao, tab_impressao = st.tabs(
+            [
+                "📋 Tabela de Resultados",
+                "💬 Histórico, Comentários e Status",
+                "🖨️ Visualizar e Imprimir OS",
+            ]
+        )
+
+        with tab_listagem:
+            c1, c2, c3 = st.columns(3)
+            c1.metric("Resultados Encontrados", len(chamados_filtrados))
+            c2.metric("Total no Banco", len(chamados_todos))
+            c3.metric("Filtro Ativo", status_filtro)
+
+            st.dataframe(
+                chamados_filtrados,
+                use_container_width=True,
+                column_config={
+                    "id": st.column_config.NumberColumn("ID", format="#%d"),
+                    "protocolo": "Protocolo",
+                    "data_abertura": "Abertura",
+                    "solicitante": "Solicitante",
+                    "projeto": "Contrato",
+                    "categoria": "Categoria",
+                    "subcategoria": "Subcategoria",
+                    "resumo": "Resumo",
+                    "impacto": "Impacto",
+                    "status": "Status",
+                    "operador": "Operador",
+                    "descricao": None,
+                    "patrimonio": None,
+                    "andar_sala": None,
+                    "ip": None,
+                },
+                hide_index=True,
+            )
+
+            st.markdown("---")
+            with st.expander("👁️ **Pré-visualizar Descrição e Laudo Completo do Chamado**", expanded=False):
+                if chamados_filtrados:
+                    opcoes_prev: Dict[str, Dict[str, Any]] = {}
+                    for c in chamados_filtrados:
+                        proto_raw: Any = c.get("protocolo") or f"ID #{c.get('id')}"
+                        solic_raw: Any = c.get("solicitante") or ""
+                        resum_raw: Any = c.get("resumo") or ""
+
+                        p_proto: str = str(proto_raw)
+                        p_solic: str = str(solic_raw)
+                        p_resum: str = str(resum_raw)
+
+                        chave_v: str = f"{p_proto} | {p_solic} - {p_resum}"
+                        opcoes_prev[chave_v] = c
+
+                    chamado_prev_sel: str = str(
+                        st.selectbox(
+                            "Selecione um chamado da lista filtrada para visualizar os detalhes:",
+                            options=list(opcoes_prev.keys()),
+                            key="sb_preview_chamado_tab1",
+                        )
+                        or ""
+                    )
+
+                    if chamado_prev_sel in opcoes_prev:
+                        ticket_p: Dict[str, Any] = opcoes_prev[chamado_prev_sel]
+
+                        col_p1, col_p2, col_p3, col_p4 = st.columns(4)
+                        col_p1.markdown(f"**Protocolo:** `{str(ticket_p.get('protocolo') or '')}`")
+                        col_p2.markdown(f"**Solicitante:** {str(ticket_p.get('solicitante') or '')}")
+                        col_p3.markdown(f"**Contrato:** `{str(ticket_p.get('projeto') or '')}`")
+                        col_p4.markdown(f"**Status:** `{str(ticket_p.get('status') or 'Aberto')}`")
+
+                        st.markdown("##### 📄 Relato do Cliente / Laudo Técnico:")
+                        desc_p: str = str(ticket_p.get("descricao") or "Sem descrição cadastrada.")
+
+                        partes_p: List[str] = desc_p.split("\n\n--- ")
+                        laudo_p: str = partes_p[0]
+                        interacoes_p: List[str] = partes_p[1:] if len(partes_p) > 1 else []
+
+                        with st.container(border=True):
+                            st.markdown(laudo_p)
+
+                        if interacoes_p:
+                            st.markdown("##### 💬 Histórico de Interações:")
+                            for item in interacoes_p:
+                                linhas_i: List[str] = item.split("\n", 1)
+                                cab_i: str = linhas_i[0].replace("---", "").strip()
+                                corp_i: str = linhas_i[1] if len(linhas_i) > 1 else ""
+
+                                with st.container(border=True):
+                                    st.markdown(f"**{cab_i}**")
+                                    st.caption(corp_i)
+                else:
+                    st.info("Nenhum chamado encontrado para pré-visualização.")
+
+        with tab_gestao:
+
+            if chamados_filtrados:
+                opcoes_chamados_gestao: Dict[str, Dict[str, Any]] = {}
+                for c in chamados_filtrados:
+                    proto_raw: Any = c.get("protocolo") or f"ID #{c.get('id')}"
+                    status_raw: Any = c.get("status") or "Aberto"
+                    solic_raw: Any = c.get("solicitante") or ""
+                    proj_raw: Any = c.get("projeto") or ""
+
+                    p_proto: str = str(proto_raw)
+                    p_status: str = str(status_raw)
+                    p_solic: str = str(solic_raw)
+                    p_proj: str = str(proj_raw)
+
+                    chave_gestao: str = f"{p_proto} | Status: [{p_status}] - {p_solic} ({p_proj})"
+                    opcoes_chamados_gestao[chave_gestao] = c
+
+                chamado_sel_chave = str(
+                    st.selectbox(
+                        "Selecione o chamado para interagir:",
+                        options=list(opcoes_chamados_gestao.keys()),
+                    )
+                    or ""
+                )
+
+                if chamado_sel_chave in opcoes_chamados_gestao:
+                    ticket_sel = opcoes_chamados_gestao[chamado_sel_chave]
+                    operador_ticket = str(ticket_sel.get("operador") or "")
+                    status_atual = str(
+                        ticket_sel.get("status") or "Aberto"
+                    )
+
+                    pode_editar = nivel_acesso in [
+                        "admin",
+                        "supervisor",
+                    ] or (
+                                          nivel_acesso == "operador"
+                                          and operador_ticket.strip().lower()
+                                          == nome_usuario_logado.strip().lower()
+                                  )
+
+                    st.markdown("---")
+                    c_inf1, c_inf2, c_inf3, c_inf4 = st.columns(4)
+                    c_inf1.markdown(f"**Protocolo:** `{str(ticket_sel.get('protocolo') or '')}`")
+                    c_inf2.markdown(f"**Solicitante:** {str(ticket_sel.get('solicitante') or '')}")
+                    c_inf3.markdown(f"**Operador:** `{operador_ticket}`")
+                    c_inf4.markdown(f"**Status Atual:** `{status_atual}`")
+
+                    st.markdown("---")
+                    st.markdown("### 📜 Histórico e Linha do Tempo do Atendimento")
+
+                    descricao_full = str(ticket_sel.get("descricao") or "")
+                    partes = descricao_full.split("\n\n--- ")
+                    laudo_inicial = partes[0]
+                    interacoes = partes[1:] if len(partes) > 1 else []
+
+                    with st.container(border=True):
+                        st.markdown("**📄 Laudo Técnico / Relato Inicial:**")
+                        st.markdown(laudo_inicial)
+
+                    if interacoes:
+                        st.markdown("#### 💬 Interações e Pareceres")
+                        for item in interacoes:
+                            linhas = item.split("\n", 1)
+                            cabecalho = linhas[0].replace("---", "").strip()
+                            corpo = linhas[1] if len(linhas) > 1 else ""
+
+                            with st.container(border=True):
+                                st.markdown(f"**{cabecalho}**")
+                                st.caption(corpo)
+
+                    if pode_editar:
+                        st.success(
+                            "✅ **Permissão concedida:** Você é o responsável por este chamado ou possui perfil de gestão."
+                        )
+
+                        col_acao1, col_acao2 = st.columns(2)
+
+                        with col_acao1:
+                            with st.form("form_novo_comentario"):
+                                st.markdown("#### 💬 Adicionar Novo Comentário")
+                                novo_comentario: str = str(
+                                    st.text_area(
+                                        "Escreva a nota técnica ou atualização:",
+                                        placeholder="Digite o andamento da solicitação...",
+                                        height=100,
+                                    )
+                                    or ""
+                                )
+                                btn_comentar = st.form_submit_button(
+                                    "💬 Salvar Comentário", type="primary"
+                                )
+
+                                if btn_comentar:
+                                    if novo_comentario.strip():
+                                        st.session_state.db.adicionar_comentario_chamado(
+                                            ticket_sel["id"],
+                                            nome_usuario_logado,
+                                            novo_comentario,
+                                        )
+                                        st.success("✅ Comentário adicionado com sucesso!")
+                                        st.rerun()
+                                    else:
+                                        st.warning("⚠️ Digite uma mensagem antes de salvar.")
+
+                        with col_acao2:
+                            with st.form("form_alterar_status"):
+                                st.markdown("#### 🔄 Mudar Status do Chamado")
+                                lista_status = [
+                                    "Aberto",
+                                    "Em Andamento",
+                                    "Suspenso",
+                                    "Aguardando Autorização",
+                                    "Fechado / Concluído",
+                                ]
+                                idx_status = (
+                                    lista_status.index(status_atual)
+                                    if status_atual in lista_status
+                                    else 0
+                                )
+
+                                novo_status: str = str(
+                                    st.selectbox(
+                                        "Selecione o novo status:",
+                                        options=lista_status,
+                                        index=idx_status,
+                                    )
+                                    or status_atual
+                                )
+                                parecer_tecnico: str = ""
+
+                                if novo_status == "Fechado / Concluído":
+                                    parecer_tecnico = str(
+                                        st.text_area(
+                                            "Parecer Técnico de Solução:",
+                                            placeholder="Procedimentos finais tomados...",
+                                            height=80,
+                                        )
+                                        or ""
+                                    )
+
+                                btn_atualizar_status = st.form_submit_button("💾 Salvar Novo Status")
+
+                                if btn_atualizar_status:
+                                    if (
+                                            novo_status == "Fechado / Concluído"
+                                            and not parecer_tecnico.strip()
+                                    ):
+                                        st.warning("⚠️ Preencha o parecer técnico antes de fechar.")
+                                    else:
+                                        st.session_state.db.atualizar_status_chamado(
+                                            ticket_sel["id"],
+                                            novo_status,
+                                            parecer_tecnico,
+                                        )
+                                        st.balloons()
+                                        st.success(f"✅ Status alterado para **{novo_status}**!")
+                                        st.rerun()
+                    else:
+                        st.error(
+                            f"🔒 **Acesso Restrito:** Chamado atribuído a **{operador_ticket}**. Operadores podem interagir apenas em seus próprios chamados."
+                        )
+            else:
+                st.info("Nenhum chamado corresponde aos filtros aplicados.")
+
+        with tab_impressao:
+            if chamados_filtrados:
+                opcoes_impressao: List[str] = []
+                for c in chamados_filtrados:
+                    p_proto: str = str(c.get("protocolo") or f"ID #{c.get('id')}")
+                    p_proj: str = str(c.get("projeto") or "")
+                    p_resum: str = str(c.get("resumo") or "")
+
+                    opcoes_impressao.append(f"{p_proto} - {p_proj} ({p_resum})")
+
+                chamado_sel_imp = str(
+                    st.selectbox("Selecione para gerar a OS:", opcoes_impressao)
+                    or ""
+                )
+
+                if chamado_sel_imp in opcoes_impressao:
+                    idx_imp = opcoes_impressao.index(chamado_sel_imp)
+                    ticket_imp = chamados_filtrados[idx_imp]
+
+                    with st.container(border=True):
+                        col_l, col_t = st.columns([1, 4])
+                        with col_l:
+                            st.image("logo.png", width=90)
+                        with col_t:
+                            st.markdown(
+                                "## 🎫 Ordem de Serviço -"
+                                f" {str(ticket_imp.get('protocolo') or '')}"
+                            )
+                            st.caption(
+                                f"Abertura: {str(ticket_imp.get('data_abertura') or '')} |"
+                                f" Status: {str(ticket_imp.get('status') or '')}"
+                            )
+
+                        st.markdown("---")
+                        c_i1, c_i2, c_i3, c_i4 = st.columns(4)
+                        c_i1.markdown(f"**Solicitante:**\n{str(ticket_imp.get('solicitante') or '')}")
+                        c_i2.markdown(f"**Projeto:**\n{str(ticket_imp.get('projeto') or '')}")
+                        c_i3.markdown(f"**Categoria:**\n{str(ticket_imp.get('categoria') or '')}")
+                        c_i4.markdown(f"**Impacto:**\n{str(ticket_imp.get('impacto') or '')}")
+
+                        st.markdown("---")
+                        st.markdown("### 📝 Descrição e Histórico")
+                        st.info(f"**Resumo:** {str(ticket_imp.get('resumo') or '')}")
+                        st.markdown(str(ticket_imp.get("descricao") or ""))
     else:
-        st.info("📭 Nenhum chamado registrado no banco de dados ainda.")
+        st.info("📭 Nenhum chamado encontrado na base de dados.")

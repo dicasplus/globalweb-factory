@@ -283,50 +283,18 @@ class AgentAI:
     def __init__(self):
         self.vocabulario = VOCABULARIO_SUPORTE
 
-    def classificar_chamado(self, texto, contratos=None, categorias_tecnicas=None):
-        """Classifica o chamado calculando a maior pontuação de termos técnicos."""
+    @staticmethod
+    def classificar_chamado(texto, contratos=None, categorias_tecnicas=None):
+        """Classifica o chamado com base em regras diretas de suporte."""
         texto_lower = texto.lower().strip()
 
-        # REGRAS DE PRIORIDADE DIRETA (Overriding)
+        # Classificação por Regras Reativas
         if any(
             t in texto_lower
             for t in [
-                "pasta de rede",
-                "pasta compartilhada",
-                "permissao",
-                "permissão",
-                "acesso a pasta",
-                "acesso a rede",
-                "sem acesso",
-                "senha",
-                "login",
-                "bloqueado",
-                "desbloquear",
-            ]
-        ):
-            cat_vencedora = "🔑 Acessos & Senhas"
-            subcat_vencedora = "Acesso a Pastas / Rede / VPN"
-        elif any(
-            t in texto_lower
-            for t in [
-                "computador",
-                "notebook",
-                "pc",
-                "maquina",
-                "máquina",
-                "impressora",
-                "monitor",
-                "teclado",
-                "mouse",
-                "novo computador",
-            ]
-        ):
-            cat_vencedora = "🖥️ Equipamentos & Hardwares"
-            subcat_vencedora = "Substituição / Instalação (EST/Patrimônio)"
-        elif any(
-            t in texto_lower
-            for t in [
                 "internet",
+                "internnet",
+                "rede",
                 "wifi",
                 "vpn",
                 "lenta",
@@ -339,13 +307,40 @@ class AgentAI:
             subcat_vencedora = "Lentidão / Instabilidade de Conexão"
         elif any(
             t in texto_lower
-            for t in ["sistema", "bug", "erro", "erp", "travando", "nao abre"]
+            for t in [
+                "computador",
+                "notebook",
+                "pc",
+                "maquina",
+                "impressora",
+                "monitor",
+                "equipamento",
+                "equipamentno",
+            ]
         ):
-            cat_vencedora = "⚙️ Sistemas & Softwares"
-            subcat_vencedora = "Erro / Bug em Aplicação"
-        else:
+            cat_vencedora = "🖥️ Equipamentos & Hardwares"
+            subcat_vencedora = "Substituição / Instalação (EST/Patrimônio)"
+        elif any(
+            t in texto_lower
+            for t in [
+                "senha",
+                "acesso",
+                "login",
+                "bloqueado",
+                "pasta de rede",
+                "permissao",
+            ]
+        ):
             cat_vencedora = "🔑 Acessos & Senhas"
-            subcat_vencedora = "Acesso a Pastas / Rede / VPN"
+            subcat_vencedora = "Redefinição / Desbloqueio de Senha"
+        else:
+            cat_vencedora = "⚙️ Sistemas & Softwares"
+            subcat_vencedora = "Geral"
+
+        if categorias_tecnicas and cat_vencedora in categorias_tecnicas:
+            subcats = categorias_tecnicas[cat_vencedora]
+            if subcats and subcat_vencedora not in subcats:
+                subcat_vencedora = subcats[0]
 
         contrato_sugerido = contratos[0] if contratos else "MCTI"
 
@@ -353,42 +348,39 @@ class AgentAI:
             "contrato": contrato_sugerido,
             "categoria": cat_vencedora,
             "subcategoria": subcat_vencedora,
-            "justificativa": (
-                f"Identificado padrão de atendimento para '{cat_vencedora}'."
-            ),
         }
 
     @staticmethod
-    def polir_descricao(texto_bruto, categoria, subcategoria):
-        """Gera uma descrição limpa, profissional e polida pela perspectiva do operador N1/N2."""
+    def polir_descricao(
+        texto_bruto, categoria, subcategoria, solicitante="Solicitante"
+    ):
+        """Reescreve o relato do cliente em um texto técnico e fluido sem marcas brutas."""
         relato_limpo = texto_bruto.strip()
 
-        # Dicionário de correções ortográficas e normalizações de digitação
         correcoes = {
+            "internnet": "internet",
             "infotma": "informa",
             "solciita": "solicita",
+            "equipamentno": "equipamento",
             "desenvolver": "desenvolvedor",
             "nao consegue": "não consegue",
-            "pasta de red": "pasta de rede",
             "copasa": "COPASA",
             "mcti": "MCTI",
+            "mec": "MEC",
         }
         for erro, correcao in correcoes.items():
             relato_limpo = relato_limpo.replace(erro, correcao)
 
-        return f"""LAUDO DE ATENDIMENTO E TRIAGEM TÉCNICA (N1/N2)
-==================================================
-CATEGORIA   : {categoria}
-SUBCATEGORIA: {subcategoria}
+        nome_solic = (
+            solicitante.split(" (")[0]
+            if solicitante and "➕ Digitar" not in solicitante
+            else "o(a) colaborador(a)"
+        )
 
-REGISTRO DA DEMANDA PELO OPERADOR:
-"Atendimento registrado referente ao relato do cliente: {relato_limpo}."
-
-SÍNTESE TÉCNICA E ANÁLISE INICIAL:
-Colaborador reporta indisponibilidade ou ausência de permissão para acesso ao recurso de rede. Demanda direcionada para verificação de grupos de segurança e conectividade do diretório compartilhado.
-
-PROCEDIMENTOS E CHECKLIST DE SUPORTE:
-- [ ] Mapear o caminho da pasta compartilhada (UNC / IP) no terminal do usuário.
-- [ ] Validar no Active Directory (AD) se a conta pertence ao grupo de segurança da pasta.
-- [ ] Testar conectividade via 'ping' ou 'net use' no ambiente.
-- [ ] Caso o usuário não possua autorização prévia, solicitar aprovação da chefia imediata."""
+        return (
+            f"Atendimento solicitado por {nome_solic} referente à categoria"
+            f" {categoria} ({subcategoria.lower()}).\n\n"
+            f'Relato informado: "{relato_limpo}".\n\n'
+            "Ação realizada/orientada: Demanda registrada e encaminhada para a"
+            " equipe de suporte responsável para análise técnica e atendimento."
+        )

@@ -1,8 +1,24 @@
+"""Módulo do Agente de Inteligência Artificial do GlobalWeb Factory.
+
+Gerencia classificação de chamados, polimento de texto e triagem reativa.
+"""
+
+import importlib
 import json
 import os
+from typing import Any, Dict, List, Optional
 import streamlit as st
 
-api_key = st.secrets.get("GEMINI_API_KEY") or os.getenv("GEMINI_API_KEY")
+
+def _obter_chave_configurada() -> Optional[str]:
+    """Obtém a chave da API do Gemini via st.secrets ou variável de ambiente."""
+    try:
+        chave = st.secrets.get("GEMINI_API_KEY")
+        if chave:
+            return str(chave)
+    except (AttributeError, KeyError, FileNotFoundError):
+        pass
+    return os.getenv("GEMINI_API_KEY")
 
 
 class AgenteAtendimento:
@@ -10,31 +26,32 @@ class AgenteAtendimento:
     e análise de governança de chamados no GlobalWeb Factory.
     """
 
-    def __init__(self, api_key: str = None):
-        self.api_key = api_key or os.getenv("GEMINI_API_KEY")
-        self.model = None
+    def __init__(self, chave_api: Optional[str] = None):
+        self.api_key: Optional[str] = chave_api or _obter_chave_configurada()
+        self.model: Any = None
 
-        # Tenta inicializar a biblioteca do Gemini se a chave estiver configurada
         if self.api_key:
             try:
-                import google.generativeai as genai
-
+                genai = importlib.import_module("google.generativeai")
                 genai.configure(api_key=self.api_key)
                 self.model = genai.GenerativeModel("gemini-1.5-flash")
-            except Exception as e:
-                print(f"Aviso: Não foi possível carregar a API do Gemini: {e}")
+            except (ImportError, Exception) as e:
+                print(f"Aviso: Modo reativo ativo (API Gemini desativada): {e}")
 
     def classificar_chamado(
-        self, texto_usuario: str, contratos: list, categorias_tecnicas: dict
-    ) -> dict:
+        self,
+        texto_usuario: str,
+        contratos: List[str],
+        categorias_tecnicas: Dict[str, List[str]],
+    ) -> Dict[str, Any]:
         """Analisa a descrição do usuário e sugere Contrato, Categoria,
         Subcategoria e Impacto.
         """
         if not texto_usuario.strip():
             return {}
 
-        # 1. Se houver chave e modelo configurado, consulta o Gemini
-        if self.model:
+        # 1. Consulta ao Modelo Gemini (caso a chave esteja configurada)
+        if self.model is not None:
             prompt = f"""
             Você é um especialista em Service Desk e triagem de chamados de TI.
             Dada a seguinte solicitação do usuário:
@@ -58,31 +75,35 @@ class AgenteAtendimento:
                 res_text = response.text.strip()
 
                 if res_text.startswith("```json"):
-                    res_text = res_text[7:-3].strip()
+                    res_text = res_text[7:]
+                    if res_text.endswith("```"):
+                        res_text = res_text[:-3]
+                    res_text = res_text.strip()
                 elif res_text.startswith("```"):
-                    res_text = res_text[3:-3].strip()
+                    res_text = res_text[3:]
+                    if res_text.endswith("```"):
+                        res_text = res_text[:-3]
+                    res_text = res_text.strip()
 
-                return json.loads(res_text)
+                dados_json = json.loads(res_text)
+                if isinstance(dados_json, dict):
+                    return dados_json
             except Exception as e:
                 print(f"Erro na chamada da IA para classificação: {e}")
 
-        # 2. Fallback Inteligente Expandido por Palavras-Chave
-        texto_lc = texto_usuario.lower()
+        # 2. Fallback Inteligente Reativo por Palavras-Chave
+        texto_lc = texto_usuario.lower().strip()
 
-        # 🏢 A. Identifica o Contrato
         contrato_sugerido = contratos[0] if contratos else "MCTI"
         for contrato in contratos:
             if contrato.lower() in texto_lc:
                 contrato_sugerido = contrato
                 break
 
-        # 📁 B. Dicionário Amplo com Prioridade Corrigida para Categorias
         mapeamento_palavras = {
-            # 🔑 1º LUGAR: Acessos & Senhas (Prioridade máxima para gestão de credenciais)
             "Acessos": [
                 "senha",
                 "palavra passe",
-                "palavra-passe",
                 "acesso",
                 "login",
                 "desbloqueio",
@@ -94,10 +115,8 @@ class AgenteAtendimento:
                 "2fa",
                 "esqueci",
                 "troca de senha",
-                "mudar a senha",
                 "credencial",
             ],
-            # ⚙️ 2º LUGAR: Sistemas & Softwares
             "Sistemas": [
                 "rh",
                 "folha",
@@ -116,7 +135,6 @@ class AgenteAtendimento:
                 "glpi",
                 "bug",
             ],
-            # 🖥️ 3º LUGAR: Equipamentos & Hardwares
             "Equipamentos": [
                 "impressora",
                 "monitor",
@@ -131,14 +149,13 @@ class AgenteAtendimento:
                 "headset",
                 "webcam",
                 "fonte",
-                "cabo hdmi",
                 "toner",
-                "papel preso",
-                "gabinete",
+                "equipamento",
+                "equipamentno",
             ],
-            # 🌐 4º LUGAR: Redes & Conectividades
             "Redes": [
                 "internet",
+                "internnet",
                 "wifi",
                 "wi-fi",
                 "vpn",
@@ -150,12 +167,9 @@ class AgenteAtendimento:
                 "lento",
                 "queda",
                 "sinal",
-                "roteador",
-                "switch",
             ],
         }
 
-        # Define Categoria padrão
         categoria_sugerida = (
             list(categorias_tecnicas.keys())[0]
             if categorias_tecnicas
@@ -163,11 +177,9 @@ class AgenteAtendimento:
         )
 
         palavras_texto = texto_lc.split()
-
-        # Procura correspondência ignorando emojis e formatação
         cat_encontrada = False
+
         for termo_chave, palavras in mapeamento_palavras.items():
-            # Busca qual é a chave REAL cadastrada no sistema que contém esse termo
             chave_real_sistema = None
             for cat_real in categorias_tecnicas.keys():
                 if termo_chave.lower() in cat_real.lower():
@@ -176,7 +188,6 @@ class AgenteAtendimento:
 
             if chave_real_sistema:
                 for palavra in palavras:
-                    # Confere palavra isolada ou trecho
                     if palavra in palavras_texto or (
                         len(palavra) > 2 and palavra in texto_lc
                     ):
@@ -187,7 +198,6 @@ class AgenteAtendimento:
             if cat_encontrada:
                 break
 
-        # 📄 C. Seleciona a Subcategoria mais adequada
         subcats_disponiveis = categorias_tecnicas.get(
             categoria_sugerida, ["Outros"]
         )
@@ -207,7 +217,6 @@ class AgenteAtendimento:
                 subcat_sugerida = sub
                 break
 
-        # ⚡ D. Identifica o Impacto
         impacto_sugerido = "Baixo"
         if any(
             w in texto_lc
@@ -234,41 +243,36 @@ class AgenteAtendimento:
             "categoria": categoria_sugerida,
             "subcategoria": subcat_sugerida,
             "impacto": impacto_sugerido,
-            "justificativa": f"Identificado palavra-chave associada ao contrato '{contrato_sugerido}' e categoria '{categoria_sugerida}'.",
+            "justificativa": (
+                f"Classificado na categoria '{categoria_sugerida}'"
+                f" ({subcat_sugerida})."
+            ),
         }
 
     def polir_descricao(
-        self, texto_bruto: str, categoria: str = "", subcategoria: str = ""
+        self,
+        texto_bruto: str,
+        categoria: str = "",
+        subcategoria: str = "",
+        solicitante: str = "",
     ) -> str:
-        """Pega o relato inicial do usuário e o padroniza em uma ordem de serviço
-        técnica detalhada com checklist para suporte N1/N2.
-        """
+        """Pega o relato do usuário e o reescreve em um texto fluido, elegante e profissional."""
         if not texto_bruto.strip():
             return ""
 
-        # 1. Se a chave da API do Gemini estiver configurada
-        if self.model:
+        # 1. Reescrita Narrativa via Gemini
+        if self.model is not None:
             prompt = f"""
-            Você é um analista de Service Desk especialista em documentação de incidentes e requisições de TI.
-            Reescreva e padronize a solicitação abaixo para que fique extremamente clara e técnica para a equipe de atendimento.
+            Você é um analista de Service Desk de TI.
+            Reescreva a solicitação abaixo em forma de texto narrativo curto, fluido e profissional (SEM marcadores como [RESUMO], SEM caixas de seleção, SEM listas ou código Markdown rígido).
 
-            Solicitação Bruta: "{texto_bruto}"
+            Solicitante: {solicitante}
             Categoria: {categoria}
             Subcategoria: {subcategoria}
+            Relato do Usuário: "{texto_bruto}"
 
-            Gere a resposta no seguinte formato estruturado (use Markdown):
-
-            **[RESUMO EXECUTIVO]**
-            (Breve resumo do problema)
-
-            **[DETALHAMENTO TÉCNICO]**
-            (Descrição clara da demanda)
-
-            **[CHECKLIST DE DIAGNÓSTICO PARA N1/N2]**
-            - [ ] Validar identificação e permissões do usuário
-            - [ ] Verificar conectividade/status do equipamento ou serviço
-            - [ ] Confirmar se o problema ocorre em outro dispositivo/ambiente
-            - [ ] Registrar logs/prints do erro no chamado
+            Exemplo de tom de resposta esperado:
+            "Atendimento registrado para o(a) colaborador(a) referente a [subcategoria]. O solicitante entrou em contato informando [relato reescrito com correção ortográfica]. Demanda encaminhada para a equipe responsável para tratativa técnica."
             """
             try:
                 response = self.model.generate_content(prompt)
@@ -276,15 +280,34 @@ class AgenteAtendimento:
             except Exception as e:
                 print(f"Erro ao polir texto com IA: {e}")
 
-        # 2. Fallback Inteligente (sem API Key)
+        # 2. Fallback Narrativo
+        relato_limpo = texto_bruto.strip()
+
+        correcoes = {
+            "internnet": "internet",
+            "infotma": "informa",
+            "solciita": "solicita",
+            "equipamentno": "equipamento",
+            "desenvolver": "desenvolvedor",
+            "nao consegue": "não consegue",
+            "copasa": "COPASA",
+            "mcti": "MCTI",
+            "mec": "MEC",
+        }
+        for erro, correcao in correcoes.items():
+            relato_limpo = relato_limpo.replace(erro, correcao)
+
+        nome_solic = (
+            solicitante.split(" (")[0]
+            if solicitante and "➕ Digitar" not in solicitante
+            else "o(a) colaborador(a)"
+        )
+
+        subcat_txt = subcategoria.lower() if subcategoria else "suporte técnico"
+
         return (
-            f"**[RESUMO EXECUTIVO]**\n"
-            f"Solicitação referente a {categoria} ({subcategoria}).\n\n"
-            f"**[DETALHAMENTO TÉCNICO]**\n"
-            f"{texto_bruto.capitalize()}.\n\n"
-            f"**[CHECKLIST DE DIAGNÓSTICO PARA N1/N2]**\n"
-            f"- [ ] Validar cadastro e permissões do usuário solicitante\n"
-            f"- [ ] Verificar status de conectividade/rede\n"
-            f"- [ ] Testar reprodutibilidade do comportamento relatado\n"
-            f"- [ ] Coletar evidências/prints do erro"
+            f"Atendimento solicitado por {nome_solic} referente a {subcat_txt}.\n\n"
+            f'Relato informado: "{relato_limpo}".\n\n'
+            "Ação realizada/orientada: Demanda registrada e encaminhada para a"
+            " equipe de suporte responsável para análise técnica e atendimento."
         )
